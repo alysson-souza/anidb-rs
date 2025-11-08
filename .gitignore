@@ -1,0 +1,23 @@
+# Rust build artifacts
+/target/
+
+# IDE
+.idea/
+
+# Editor temporary files
+*.swp
+*.swo
+*~
+
+# OS files
+.DS_Store
+Thumbs.db
+
+# Claude Code
+.claude/*.local.json
+
+# Environment variables
+.env
+# SQLite temporary files
+*.db-shm
+*.db-wal

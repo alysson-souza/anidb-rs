@@ -1,0 +1,11 @@
+[package]
+name = "anidb-test-utils"
+version = "0.1.0-alpha"
+edition = "2024"
+authors = ["Alysson Souza"]
+description = "Test utilities for AniDB client"
+license = "MIT"
+
+[dependencies]
+anidb_client_core = { path = "../anidb_client_core" }
+tokio = { version = "1.43", features = ["full"] }

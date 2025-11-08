@@ -1,0 +1,5 @@
+module CAniDB [system] {
+    header "anidb_shim.h"
+    link "anidb_client_core"
+    export *
+}

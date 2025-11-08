@@ -1,0 +1,20 @@
+include README.md
+include LICENSE
+include pyproject.toml
+include src/anidb_client/py.typed
+
+# Include native libraries
+include src/anidb_client/*.so
+include src/anidb_client/*.dylib
+include src/anidb_client/*.dll
+
+# Include examples
+recursive-include examples *.py
+
+# Include tests
+recursive-include tests *.py
+
+# Exclude compiled Python files
+global-exclude *.py[cod]
+global-exclude __pycache__
+global-exclude .git*

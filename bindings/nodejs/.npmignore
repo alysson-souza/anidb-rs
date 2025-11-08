@@ -1,0 +1,37 @@
+# Source files
+src/
+tests/
+examples/
+
+# Build files
+build.sh
+build.ps1
+binding.gyp
+tsconfig.json
+
+# Development files
+.gitignore
+.eslintrc.json
+.prettierrc
+jest.config.js
+
+# Build artifacts (except Release)
+build/*
+!build/Release/
+build/Release/*
+!build/Release/*.node
+
+# Test artifacts
+coverage/
+.nyc_output/
+*.test.dat
+.anidb_cache/
+test_cache/
+
+# IDE
+.vscode/
+.idea/
+
+# OS
+.DS_Store
+Thumbs.db

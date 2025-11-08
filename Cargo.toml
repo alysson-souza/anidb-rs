@@ -1,0 +1,84 @@
+[workspace]
+members = [
+    "anidb_client_core",
+    "anidb_cli",
+    "anidb-test-utils",
+]
+resolver = "2"
+
+[workspace.package]
+version = "0.1.0-alpha"
+edition = "2024"
+rust-version = "1.91"
+authors = ["Alysson Souza"]
+license = "MIT"
+repository = "https://github.com/alysson-souza/anidb-rs"
+description = "AniDB client for file processing and anime database management"
+
+[workspace.dependencies]
+# Core dependencies
+tokio = { version = "1.47", features = ["full"] }
+serde = { version = "1.0", features = ["derive"] }
+serde_json = "1.0"
+thiserror = "2.0"
+anyhow = "1.0"
+figment = { version = "0.10", features = ["toml", "env"] }
+
+# Hashing dependencies
+md4 = "0.10"
+crc32fast = "1.5"
+
+# Testing dependencies
+tempfile = "3.7"
+criterion = "0.7"
+proptest = "1.2"
+futures = "0.3"
+
+# CLI dependencies
+clap = { version = "4.5", features = ["derive", "cargo"] }
+
+# Platform dependencies
+dirs = "6.0"
+
+[profile.dev]
+opt-level = 0
+debug = true
+strip = "none"
+debug-assertions = true
+overflow-checks = true
+lto = false
+panic = 'unwind'
+incremental = true
+codegen-units = 256
+rpath = false
+
+[profile.dev.build-override]
+inherits = "dev"
+opt-level = 0
+codegen-units = 256
+debug = false
+
+[profile.release]
+opt-level = 3
+debug = false
+strip = "none"
+debug-assertions = false
+overflow-checks = false
+lto = false
+panic = 'unwind'
+incremental = false
+codegen-units = 16
+rpath = false
+
+[profile.release-lto]
+inherits = "release"
+lto = true
+codegen-units = 1
+
+[profile.release-lto.build-override]
+inherits = "release"
+opt-level = 3
+codegen-units = 1
+
+[profile.bench]
+inherits = "release"
