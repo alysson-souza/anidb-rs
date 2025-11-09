@@ -4,6 +4,7 @@
 //! and sends files to MyList on AniDB.
 
 use anidb_client_core::database::models::{SyncQueueItem, SyncStatus};
+use anidb_client_core::database::repositories::anidb_result::AniDBResultRepository;
 use anidb_client_core::database::repositories::sync_queue::{QueueStats, SyncQueueRepository};
 use anidb_client_core::database::repositories::{FileRepository, HashRepository, Repository};
 use anidb_client_core::error::{Error, IoError, ProtocolError, Result, ValidationError};
@@ -76,6 +77,8 @@ pub struct AniDBSyncService {
     file_repo: Arc<FileRepository>,
     /// Hash repository
     hash_repo: Arc<HashRepository>,
+    /// AniDB result repository (for cache updates)
+    anidb_repo: Arc<AniDBResultRepository>,
     /// Protocol client for AniDB communication
     protocol_client: Arc<Mutex<ProtocolClient>>,
     /// Credential store
@@ -118,6 +121,7 @@ impl AniDBSyncService {
         sync_repo: Arc<SyncQueueRepository>,
         file_repo: Arc<FileRepository>,
         hash_repo: Arc<HashRepository>,
+        anidb_repo: Arc<AniDBResultRepository>,
         protocol_client: Arc<Mutex<ProtocolClient>>,
         credential_store: Arc<EncryptedFileStore>,
         config: SyncServiceConfig,
@@ -126,6 +130,7 @@ impl AniDBSyncService {
             sync_repo,
             file_repo,
             hash_repo,
+            anidb_repo,
             protocol_client,
             credential_store,
             config,
@@ -225,23 +230,36 @@ impl AniDBSyncService {
 
         // Process response
         if mylist_response.success() {
+            let lid = mylist_response.lid.unwrap_or(0);
             info!(
                 "Successfully added file {} to MyList (lid: {})",
-                item.file_id,
-                mylist_response.lid.unwrap_or(0)
+                item.file_id, lid
             );
-            Ok(ItemResult::Success {
-                lid: mylist_response.lid.unwrap_or(0),
-            })
+
+            // Update cache with mylist_lid
+            if let Err(e) = self
+                .anidb_repo
+                .update_mylist_lid(item.file_id, Some(lid as i64))
+                .await
+            {
+                warn!("Failed to update cache with mylist_lid: {}", e);
+            }
+
+            Ok(ItemResult::Success { lid })
         } else if mylist_response.already_in_list() {
-            info!(
-                "File {} already in MyList (lid: {})",
-                item.file_id,
-                mylist_response.lid.unwrap_or(0)
-            );
-            Ok(ItemResult::AlreadyInList {
-                lid: mylist_response.lid.unwrap_or(0),
-            })
+            let lid = mylist_response.lid.unwrap_or(0);
+            info!("File {} already in MyList (lid: {})", item.file_id, lid);
+
+            // Update cache with mylist_lid
+            if let Err(e) = self
+                .anidb_repo
+                .update_mylist_lid(item.file_id, Some(lid as i64))
+                .await
+            {
+                warn!("Failed to update cache with mylist_lid: {}", e);
+            }
+
+            Ok(ItemResult::AlreadyInList { lid })
         } else if mylist_response.file_not_found() {
             error!("File {} not found in AniDB", item.file_id);
             Ok(ItemResult::Failed {
@@ -481,6 +499,7 @@ mod tests {
         let sync_repo = Arc::new(SyncQueueRepository::new(db.pool().clone()));
         let file_repo = Arc::new(FileRepository::new(db.pool().clone()));
         let hash_repo = Arc::new(HashRepository::new(db.pool().clone()));
+        let anidb_repo = Arc::new(AniDBResultRepository::new(db.pool().clone()));
 
         // Create protocol client
         let protocol_config = ProtocolConfig::default();
@@ -497,6 +516,7 @@ mod tests {
             sync_repo,
             file_repo,
             hash_repo,
+            anidb_repo,
             protocol_client,
             credential_store,
             config,

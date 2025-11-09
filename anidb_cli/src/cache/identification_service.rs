@@ -422,6 +422,7 @@ impl IdentificationCacheService {
             audio_codec: file_info.audio_codec.clone(),
             source: file_info.source.clone(),
             quality: file_info.quality.clone(),
+            mylist_lid: None, // Not in MyList yet
             fetched_at: now,
             expires_at: Some(expires_at),
             created_at: now,
@@ -554,6 +555,7 @@ mod tests {
             audio_codec: Some("aac".to_string()),
             source: Some("www".to_string()),
             quality: Some("high".to_string()),
+            mylist_lid: None,
             fetched_at: time_utils::now_millis() - 3600000, // 1 hour ago
             expires_at: Some(time_utils::now_millis() + 86400000), // 1 day from now
             created_at: time_utils::now_millis() - 3600000,

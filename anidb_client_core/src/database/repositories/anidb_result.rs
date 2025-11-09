@@ -433,6 +433,26 @@ impl AniDBResultRepository {
         Ok(stats)
     }
 
+    /// Update mylist_lid for a result by file_id
+    pub async fn update_mylist_lid(&self, file_id: i64, mylist_lid: Option<i64>) -> Result<()> {
+        let now = time_utils::now_millis();
+
+        sqlx::query(
+            r#"
+            UPDATE anidb_results
+            SET mylist_lid = ?, updated_at = ?
+            WHERE file_id = ?
+            "#,
+        )
+        .bind(mylist_lid)
+        .bind(now)
+        .bind(file_id)
+        .execute(&self.pool)
+        .await?;
+
+        Ok(())
+    }
+
     /// Convert a database row to AniDBResult
     async fn row_to_anidb_result(
         &self,
@@ -461,6 +481,7 @@ impl AniDBResultRepository {
                 audio_codec: row.try_get("audio_codec")?,
                 source: row.try_get("source")?,
                 quality: row.try_get("quality")?,
+                mylist_lid: row.try_get("mylist_lid").ok().flatten(),
                 fetched_at: row.try_get("fetched_at")?,
                 expires_at: row.try_get("expires_at")?,
                 created_at: row.try_get("created_at")?,
@@ -619,6 +640,7 @@ mod tests {
             quality: Some("high".to_string()),
             fetched_at: time_utils::now_millis(),
             expires_at: None,
+            mylist_lid: None,
             created_at: time_utils::now_millis(),
             updated_at: time_utils::now_millis(),
         };
@@ -688,6 +710,7 @@ mod tests {
             quality: None,
             fetched_at: time_utils::now_millis() - 1000000,
             expires_at: Some(time_utils::now_millis() - 1000), // Expired
+            mylist_lid: None,
             created_at: time_utils::now_millis(),
             updated_at: time_utils::now_millis(),
         };
@@ -757,6 +780,7 @@ mod tests {
                 quality: Some("high".to_string()),
                 fetched_at: time_utils::now_millis(),
                 expires_at: None,
+                mylist_lid: None,
                 created_at: time_utils::now_millis(),
                 updated_at: time_utils::now_millis(),
             });
@@ -822,6 +846,7 @@ mod tests {
                 quality: None,
                 fetched_at: time_utils::now_millis(),
                 expires_at: None,
+                mylist_lid: None,
                 created_at: time_utils::now_millis(),
                 updated_at: time_utils::now_millis(),
             };
@@ -888,6 +913,7 @@ mod tests {
                 quality: None,
                 fetched_at: time_utils::now_millis(),
                 expires_at: None,
+                mylist_lid: None,
                 created_at: time_utils::now_millis(),
                 updated_at: time_utils::now_millis(),
             };
@@ -958,6 +984,7 @@ mod tests {
                 quality: None,
                 fetched_at: time_utils::now_millis(),
                 expires_at: None,
+                mylist_lid: None,
                 created_at: time_utils::now_millis() - (i as i64 * 1000), // Different creation times
                 updated_at: time_utils::now_millis(),
             };
@@ -1021,6 +1048,7 @@ mod tests {
                     quality: Some("high".to_string()),
                     fetched_at: time_utils::now_millis(),
                     expires_at: None,
+                    mylist_lid: None,
                     created_at: time_utils::now_millis(),
                     updated_at: time_utils::now_millis(),
                 };

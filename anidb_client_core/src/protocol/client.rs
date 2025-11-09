@@ -372,12 +372,21 @@ impl ProtocolClient {
 
         // Log the encoded command (mask sensitive data)
         if command_name == "AUTH" {
-            debug!(
-                "Encoded AUTH command (password masked): {}",
-                encoded.split('&').take(2).collect::<Vec<_>>().join("&") + "&pass=***"
-            );
+            // Mask the password value but keep the structure
+            let masked = encoded
+                .split('&')
+                .map(|part| {
+                    if part.starts_with("pass=") {
+                        "pass=***"
+                    } else {
+                        part
+                    }
+                })
+                .collect::<Vec<_>>()
+                .join("&");
+            debug!("Encoded AUTH command (password masked): {}", masked);
         } else {
-            debug!("");
+            debug!("Encoded command: {}", encoded);
         }
 
         // Try sending with retries

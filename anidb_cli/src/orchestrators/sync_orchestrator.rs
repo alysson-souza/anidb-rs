@@ -6,7 +6,8 @@
 use crate::progress::{create_progress_infrastructure, render_progress};
 use crate::sync::{AniDBSyncService, ProcessResult, SyncService, SyncServiceConfig};
 use anidb_client_core::database::repositories::{
-    FileRepository, HashRepository, sync_queue::SyncQueueRepository,
+    FileRepository, HashRepository, anidb_result::AniDBResultRepository,
+    sync_queue::SyncQueueRepository,
 };
 use anidb_client_core::protocol::{ProtocolClient, ProtocolConfig};
 use anidb_client_core::security::fallback::EncryptedFileStore;
@@ -80,6 +81,7 @@ impl SyncOrchestrator {
         let sync_repo = Arc::new(SyncQueueRepository::new(db.pool().clone()));
         let file_repo = Arc::new(FileRepository::new(db.pool().clone()));
         let hash_repo = Arc::new(HashRepository::new(db.pool().clone()));
+        let anidb_repo = Arc::new(AniDBResultRepository::new(db.pool().clone()));
 
         // Create protocol client
         let protocol_config = ProtocolConfig::default();
@@ -106,6 +108,7 @@ impl SyncOrchestrator {
             sync_repo.clone(),
             file_repo,
             hash_repo,
+            anidb_repo,
             protocol_client,
             credential_store,
             service_config,

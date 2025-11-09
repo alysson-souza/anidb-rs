@@ -33,8 +33,8 @@ pub const DEFAULT_PORT: u16 = 9000;
 /// Session timeout in seconds (30 minutes)
 pub const SESSION_TIMEOUT_SECS: u64 = 1800;
 
-/// Rate limit: maximum requests per second (0.5 req/sec = 1 req per 2 seconds)
-pub const RATE_LIMIT_REQUESTS_PER_SECOND: f64 = 0.5;
+/// Rate limit: maximum requests per second (0.4 req/sec = 1 req per 2.5 seconds)
+pub const RATE_LIMIT_REQUESTS_PER_SECOND: f64 = 0.4;
 
 #[cfg(test)]
 mod tests {
@@ -47,6 +47,6 @@ mod tests {
         assert_eq!(DEFAULT_SERVER, "api.anidb.net");
         assert_eq!(DEFAULT_PORT, 9000);
         assert_eq!(SESSION_TIMEOUT_SECS, 1800);
-        assert_eq!(RATE_LIMIT_REQUESTS_PER_SECOND, 0.5);
+        assert_eq!(RATE_LIMIT_REQUESTS_PER_SECOND, 0.4);
     }
 }

@@ -150,15 +150,30 @@ async fn test_query_manager_no_deadlock() {
     let episode_future = manager.query_episode(123);
     let group_future = manager.query_group(456);
 
-    // Use timeout to ensure the methods don't hang indefinitely
-    let timeout_duration = Duration::from_secs(2);
+    // Use timeout to ensure the methods don't hang indefinitely. The timeout must account for
+    // the enforced protocol rate limit. We derive it from the current
+    // RATE_LIMIT_REQUESTS_PER_SECOND constant plus a safety margin so that changes to
+    // the rate limit do not cause spurious test failures.
+    let per_request_ms =
+        (1000.0 / anidb_client_core::protocol::RATE_LIMIT_REQUESTS_PER_SECOND).ceil() as u64;
+    // Allow one full rate-limit interval + 1s margin.
+    let timeout_duration = Duration::from_millis(per_request_ms + 1000);
 
     let anime_result = tokio::time::timeout(timeout_duration, anime_future).await;
     let episode_result = tokio::time::timeout(timeout_duration, episode_future).await;
     let group_result = tokio::time::timeout(timeout_duration, group_future).await;
 
     // All should complete (with errors) rather than timing out
-    assert!(anime_result.is_ok(), "query_anime should not hang");
-    assert!(episode_result.is_ok(), "query_episode should not hang");
-    assert!(group_result.is_ok(), "query_group should not hang");
+    assert!(
+        anime_result.is_ok(),
+        "query_anime should not hang (rate-limit aware timeout)"
+    );
+    assert!(
+        episode_result.is_ok(),
+        "query_episode should not hang (rate-limit aware timeout)"
+    );
+    assert!(
+        group_result.is_ok(),
+        "query_group should not hang (rate-limit aware timeout)"
+    );
 }

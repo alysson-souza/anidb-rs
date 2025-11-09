@@ -7,14 +7,20 @@ use crate::cache::IdentificationCacheService;
 use crate::progress::{create_progress_infrastructure, render_progress};
 use crate::terminal;
 use anidb_client_core::api::AniDBClient;
+use anidb_client_core::database::models::{File, FileStatus, time_utils};
+use anidb_client_core::database::repositories::Repository;
 use anidb_client_core::database::repositories::anidb_result::AniDBResultRepository;
+use anidb_client_core::database::repositories::file::FileRepository;
+use anidb_client_core::database::repositories::sync_queue::SyncQueueRepository;
 use anidb_client_core::identification::{
-    FileIdentificationService, IdentificationOptions, IdentificationResult, ServiceConfig,
+    FileIdentificationService, IdentificationOptions, IdentificationResult, IdentificationStatus,
+    ServiceConfig,
 };
 use anidb_client_core::{ClientConfig, Database};
 use anyhow::{Context, Result};
 use colored::*;
 use log::{debug, trace};
+use std::io::{self, Write};
 use std::path::{Path, PathBuf};
 use std::sync::Arc;
 use std::time::Instant;
@@ -37,12 +43,16 @@ pub struct DirectoryIdentifyOptions {
     pub exclude_patterns: Vec<String>,
     pub use_defaults: bool,
     pub no_cache: bool,
+    pub add_to_mylist: bool,
+    pub no_mylist: bool,
 }
 
 /// Orchestrator for the identify command
 #[allow(dead_code)] // Used in main.rs when identify command is fully integrated
 pub struct IdentifyOrchestrator {
     cache_service: IdentificationCacheService,
+    file_repo: Arc<FileRepository>,
+    sync_repo: Arc<SyncQueueRepository>,
     verbose: bool,
 }
 
@@ -90,9 +100,15 @@ impl IdentifyOrchestrator {
         let cache_service =
             IdentificationCacheService::new(service, client, db_repo).with_verbose(verbose);
 
+        // Create file and sync queue repositories
+        let file_repo = Arc::new(FileRepository::new(db.pool().clone()));
+        let sync_repo = Arc::new(SyncQueueRepository::new(db.pool().clone()));
+
         debug!("Identify orchestrator created successfully with cache service");
         Ok(Self {
             cache_service,
+            file_repo,
+            sync_repo,
             verbose,
         })
     }
@@ -103,6 +119,19 @@ impl IdentifyOrchestrator {
         path: &Path,
         format: OutputFormat,
         no_cache: bool,
+    ) -> Result<IdentificationResult> {
+        self.identify_file_with_mylist(path, format, no_cache, false, false)
+            .await
+    }
+
+    /// Identify a single file with MyList options
+    pub async fn identify_file_with_mylist(
+        &self,
+        path: &Path,
+        format: OutputFormat,
+        no_cache: bool,
+        add_to_mylist: bool,
+        no_mylist: bool,
     ) -> Result<IdentificationResult> {
         debug!("Identifying file: {path:?} with format: {format:?}, no_cache: {no_cache}");
 
@@ -151,6 +180,17 @@ impl IdentifyOrchestrator {
         // Output the result based on format
         debug!("Outputting result in {format:?} format");
         self.output_result(&result, format, elapsed)?;
+
+        // Handle MyList queueing for single file
+        if result.status == IdentificationStatus::Identified && !no_mylist {
+            if add_to_mylist {
+                // Auto-queue without prompting
+                self.enqueue_to_mylist(path, &result).await?;
+            } else if terminal::is_interactive() {
+                // Prompt user
+                self.prompt_and_enqueue_single(path, &result).await?;
+            }
+        }
 
         Ok(result)
     }
@@ -228,6 +268,22 @@ impl IdentifyOrchestrator {
             eprintln!("Files processed: {}", files.len());
             eprintln!("Successfully identified: {}", results.len());
             eprintln!("Total time: {:.2}s", total_elapsed.as_secs_f64());
+        }
+
+        // Handle MyList queueing for batch
+        let successful_results: Vec<_> = results
+            .iter()
+            .filter(|r| r.status == IdentificationStatus::Identified)
+            .collect();
+
+        if !successful_results.is_empty() && !options.no_mylist {
+            if options.add_to_mylist {
+                // Auto-queue all without prompting
+                self.batch_enqueue_to_mylist(&successful_results).await?;
+            } else if terminal::is_interactive() {
+                // Prompt user once for batch
+                self.prompt_and_enqueue_batch(&successful_results).await?;
+            }
         }
 
         Ok(results)
@@ -625,5 +681,113 @@ impl IdentifyOrchestrator {
         } else {
             field.to_string()
         }
+    }
+
+    /// Enqueue a single file to MyList
+    async fn enqueue_to_mylist(
+        &self,
+        file_path: &Path,
+        result: &IdentificationResult,
+    ) -> Result<()> {
+        if let Some(_anidb_file_id) = result.file_id() {
+            // Get or create the file in the local database
+            let local_file_id =
+                if let Some(existing_file) = self.file_repo.find_by_path(file_path).await? {
+                    existing_file.id
+                } else {
+                    // File doesn't exist, create it
+                    let metadata = std::fs::metadata(file_path)?;
+                    let now = time_utils::now_millis();
+
+                    let file = File {
+                        id: 0,
+                        path: file_path.to_string_lossy().to_string(),
+                        size: metadata.len() as i64,
+                        modified_time: metadata
+                            .modified()
+                            .ok()
+                            .and_then(|t| t.duration_since(std::time::UNIX_EPOCH).ok())
+                            .map(|d| d.as_millis() as i64)
+                            .unwrap_or(now),
+                        inode: None,
+                        status: FileStatus::Processed,
+                        last_checked: now,
+                        created_at: now,
+                        updated_at: now,
+                    };
+
+                    self.file_repo.create(&file).await?
+                };
+
+            debug!("Enqueueing local file ID {} to MyList", local_file_id);
+            self.sync_repo
+                .enqueue(local_file_id, "mylist_add", 5)
+                .await?;
+            eprintln!("{}", "✓ Added to MyList sync queue".green());
+        }
+        Ok(())
+    }
+
+    /// Prompt user and enqueue single file to MyList
+    async fn prompt_and_enqueue_single(
+        &self,
+        file_path: &Path,
+        result: &IdentificationResult,
+    ) -> Result<()> {
+        eprint!("Add to MyList? [y/N]: ");
+        io::stdout().flush()?;
+
+        let mut input = String::new();
+        io::stdin().read_line(&mut input)?;
+        let input = input.trim();
+
+        if matches!(input, "y" | "Y" | "yes" | "Yes") {
+            self.enqueue_to_mylist(file_path, result).await?;
+        }
+
+        Ok(())
+    }
+
+    /// Batch enqueue multiple files to MyList
+    async fn batch_enqueue_to_mylist(&self, results: &[&IdentificationResult]) -> Result<()> {
+        let operations: Vec<(i64, String, i32)> = results
+            .iter()
+            .filter_map(|r| {
+                r.file_id()
+                    .map(|fid| (fid as i64, "mylist_add".to_string(), 5))
+            })
+            .collect();
+
+        if !operations.is_empty() {
+            debug!("Batch enqueueing {} files to MyList", operations.len());
+            self.sync_repo.batch_enqueue(&operations).await?;
+            eprintln!(
+                "{}",
+                format!("✓ Added {} files to MyList sync queue", operations.len()).green()
+            );
+        }
+
+        Ok(())
+    }
+
+    /// Prompt user and batch enqueue files to MyList
+    async fn prompt_and_enqueue_batch(&self, results: &[&IdentificationResult]) -> Result<()> {
+        let count = results.len();
+        eprintln!();
+        eprint!(
+            "Add {} successfully identified files to MyList? [y/N]: ",
+            count
+        );
+        io::stdout().flush()?;
+
+        let mut input = String::new();
+        io::stdin().read_line(&mut input)?;
+        let input = input.trim();
+
+        if matches!(input, "y" | "Y" | "yes" | "Yes") {
+            self.batch_enqueue_to_mylist(results).await?;
+        }
+
+        Ok(())
     }
 }

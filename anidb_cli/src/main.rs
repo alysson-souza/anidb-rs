@@ -98,6 +98,14 @@ enum Commands {
         #[arg(short, long)]
         verbose: bool,
 
+        /// Automatically add successfully identified files to MyList (no prompt)
+        #[arg(long)]
+        add_to_mylist: bool,
+
+        /// Skip MyList prompting entirely (for CI/scripting)
+        #[arg(long, conflicts_with = "add_to_mylist")]
+        no_mylist: bool,
+
         /// Bypass cache and force network query
         #[arg(long)]
         no_cache: bool,
@@ -254,6 +262,8 @@ async fn main() -> Result<()> {
             no_defaults,
             recursive,
             verbose,
+            add_to_mylist,
+            no_mylist,
             no_cache,
         } => {
             use anidb_cli::orchestrators::identify_orchestrator::{
@@ -285,7 +295,9 @@ async fn main() -> Result<()> {
             // Process based on path type
             if path.is_file() {
                 log::debug!("Path is a file, identifying single file");
-                orchestrator.identify_file(&path, format, no_cache).await?;
+                orchestrator
+                    .identify_file_with_mylist(&path, format, no_cache, add_to_mylist, no_mylist)
+                    .await?;
             } else if path.is_dir() {
                 log::debug!("Path is a directory, identifying multiple files");
                 let options = DirectoryIdentifyOptions {
@@ -295,6 +307,8 @@ async fn main() -> Result<()> {
                     exclude_patterns,
                     use_defaults: !no_defaults,
                     no_cache,
+                    add_to_mylist,
+                    no_mylist,
                 };
                 orchestrator.identify_directory(&path, options).await?;
             } else {

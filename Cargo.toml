@@ -5,6 +5,7 @@ members = [
     "anidb-test-utils",
 ]
 resolver = "2"
+default-members = ["anidb_cli"]
 
 [workspace.package]
 version = "0.1.0-alpha"

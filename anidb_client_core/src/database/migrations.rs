@@ -7,7 +7,7 @@ use crate::{Error, Result, error::InternalError};
 use sqlx::SqlitePool;
 use std::time::{SystemTime, UNIX_EPOCH};
 
-use super::schema::{MIGRATION_FROM_HASH_CACHE, SCHEMA_V1, SCHEMA_V2};
+use super::schema::{MIGRATION_FROM_HASH_CACHE, SCHEMA_V1, SCHEMA_V2, SCHEMA_V3};
 
 /// Run all necessary migrations
 pub async fn run_migrations(pool: &SqlitePool) -> Result<()> {
@@ -27,6 +27,45 @@ pub async fn run_migrations(pool: &SqlitePool) -> Result<()> {
     // Apply v2 migration for performance profiles
     if current_version < 2 {
         apply_migration(pool, 2, SCHEMA_V2).await?;
+    }
+
+    // Apply v3 migration for mylist_lid tracking
+    if current_version < 3 {
+        apply_migration_v3(pool).await?;
+    }
+
+    Ok(())
+}
+
+/// Apply migration v3 with column existence check
+async fn apply_migration_v3(pool: &SqlitePool) -> Result<()> {
+    // Check if mylist_lid column already exists
+    let column_exists = sqlx::query_scalar::<_, i64>(
+        "SELECT COUNT(*) FROM pragma_table_info('anidb_results') WHERE name='mylist_lid'",
+    )
+    .fetch_one(pool)
+    .await?;
+
+    // Only add column if it doesn't exist
+    if column_exists == 0 {
+        apply_migration(pool, 3, SCHEMA_V3).await?;
+    } else {
+        // Column already exists, just record the migration
+        let now = SystemTime::now()
+            .duration_since(UNIX_EPOCH)
+            .unwrap_or_default()
+            .as_millis() as i64;
+
+        sqlx::query("INSERT OR IGNORE INTO schema_version (version, applied_at) VALUES (?, ?)")
+            .bind(3)
+            .bind(now)
+            .execute(pool)
+            .await
+            .map_err(|e| {
+                Error::Internal(InternalError::assertion(format!(
+                    "Failed to record migration 3: {e}"
+                )))
+            })?;
     }
 
     Ok(())

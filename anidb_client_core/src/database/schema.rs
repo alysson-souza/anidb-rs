@@ -3,7 +3,7 @@
 //! This module contains all SQL schema definitions for the AniDB client database.
 
 /// Current schema version
-pub const CURRENT_SCHEMA_VERSION: i32 = 2;
+pub const CURRENT_SCHEMA_VERSION: i32 = 3;
 
 /// Initial schema creation SQL
 pub const SCHEMA_V1: &str = r#"
@@ -209,4 +209,16 @@ CREATE INDEX IF NOT EXISTS idx_learned_adjustments_created ON learned_adjustment
 
 CREATE INDEX IF NOT EXISTS idx_storage_metrics_storage ON storage_performance_metrics(storage_type);
 CREATE INDEX IF NOT EXISTS idx_storage_metrics_recorded ON storage_performance_metrics(recorded_at);
+"#;
+
+/// Schema v3: Add mylist_lid to anidb_results for MyList tracking
+pub const SCHEMA_V3: &str = r#"
+-- Add mylist_lid column to track MyList membership (if it doesn't exist)
+-- SQLite doesn't have IF NOT EXISTS for ALTER TABLE, so we handle this in the migration code
+
+-- For now, we'll attempt the ALTER and let the migration handler deal with duplicates
+ALTER TABLE anidb_results ADD COLUMN mylist_lid INTEGER;
+
+-- Create index for mylist_lid lookups
+CREATE INDEX IF NOT EXISTS idx_anidb_results_mylist_lid ON anidb_results(mylist_lid);
 "#;

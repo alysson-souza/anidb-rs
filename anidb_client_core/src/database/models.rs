@@ -100,6 +100,7 @@ pub struct AniDBResult {
     pub audio_codec: Option<String>,
     pub source: Option<String>,
     pub quality: Option<String>,
+    pub mylist_lid: Option<i64>,
     pub fetched_at: i64,
     pub expires_at: Option<i64>,
     pub created_at: i64,
@@ -244,6 +245,7 @@ mod tests {
             quality: None,
             fetched_at: now,
             expires_at: Some(now + 1000),
+            mylist_lid: None,
             created_at: now,
             updated_at: now,
         };
