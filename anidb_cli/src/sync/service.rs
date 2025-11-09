@@ -36,8 +36,8 @@ pub trait SyncService: Send + Sync {
     #[allow(dead_code)]
     async fn cancel_by_file_ids(&self, file_ids: &[i64]) -> Result<u64>;
 
-    /// Clear completed items older than the specified duration
-    async fn clear_completed(&self, max_age: Duration) -> Result<u64>;
+    /// Clear all items from the sync queue unconditionally
+    async fn clear_all(&self) -> Result<u64>;
 }
 
 /// Result of processing the sync queue
@@ -508,9 +508,8 @@ impl SyncService for AniDBSyncService {
         self.sync_repo.cancel_by_file_ids(file_ids).await
     }
 
-    async fn clear_completed(&self, max_age: Duration) -> Result<u64> {
-        let max_age_ms = max_age.as_millis() as i64;
-        self.sync_repo.clear_completed(max_age_ms).await
+    async fn clear_all(&self) -> Result<u64> {
+        self.sync_repo.clear_all().await
     }
 }
 

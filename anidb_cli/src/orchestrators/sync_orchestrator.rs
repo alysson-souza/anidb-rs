@@ -294,15 +294,13 @@ impl SyncOrchestrator {
         Ok(())
     }
 
-    /// Clear completed sync items
-    pub async fn clear_completed(&self, days: u32) -> Result<()> {
-        let max_age = Duration::from_secs(days as u64 * 24 * 60 * 60);
-
+    /// Clear all sync items unconditionally
+    pub async fn clear_all(&self) -> Result<()> {
         let count = self
             .service
-            .clear_completed(max_age)
+            .clear_all()
             .await
-            .context("Failed to clear completed items")?;
+            .context("Failed to clear sync queue")?;
 
         match self.options.format {
             OutputFormat::Json => {
@@ -314,12 +312,11 @@ impl SyncOrchestrator {
             OutputFormat::Human => {
                 if count > 0 {
                     println!(
-                        "✓ Cleared {} completed sync items older than {} days",
-                        count.to_string().green(),
-                        days
+                        "✓ Cleared {} items from sync queue",
+                        count.to_string().green()
                     );
                 } else {
-                    println!("No completed items older than {days} days to clear");
+                    println!("Sync queue is empty");
                 }
             }
         }

@@ -86,12 +86,8 @@ pub enum SyncSubcommand {
         dry_run: bool,
     },
 
-    /// Clear completed sync items
-    Clear {
-        /// Age in days (clear items older than this)
-        #[arg(short, long, default_value = "30")]
-        days: u32,
-    },
+    /// Clear all sync items unconditionally
+    Clear,
 }
 
 /// Execute sync command
@@ -168,7 +164,7 @@ pub async fn execute(cmd: SyncCommand) -> Result<()> {
                 .context("Failed to retry failed items")?;
         }
 
-        SyncSubcommand::Clear { days } => {
+        SyncSubcommand::Clear => {
             let options = SyncOptions {
                 format: cmd.format.into(),
                 verbose: cmd.verbose,
@@ -180,9 +176,9 @@ pub async fn execute(cmd: SyncCommand) -> Result<()> {
                 .context("Failed to initialize sync orchestrator")?;
 
             orchestrator
-                .clear_completed(days)
+                .clear_all()
                 .await
-                .context("Failed to clear completed items")?;
+                .context("Failed to clear sync queue")?;
         }
     }
 

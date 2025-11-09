@@ -209,13 +209,9 @@ impl SyncQueueRepository {
         self.create(&item).await
     }
 
-    /// Clear completed items older than specified age
-    pub async fn clear_completed(&self, max_age_ms: i64) -> Result<u64> {
-        let cutoff_time = time_utils::now_millis() - max_age_ms;
-
-        let result = sqlx::query("DELETE FROM sync_queue WHERE status = ? AND updated_at < ?")
-            .bind(SyncStatus::Completed)
-            .bind(cutoff_time)
+    /// Clear all items from sync queue unconditionally
+    pub async fn clear_all(&self) -> Result<u64> {
+        let result = sqlx::query("DELETE FROM sync_queue")
             .execute(&self.pool)
             .await?;
 
