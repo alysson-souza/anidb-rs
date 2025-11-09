@@ -8,11 +8,13 @@ use crate::paths;
 use crate::progress::{create_progress_infrastructure, render_progress};
 use crate::terminal;
 use anidb_client_core::api::AniDBClient;
-use anidb_client_core::database::models::{File, FileStatus, time_utils};
+use anidb_client_core::database::models::{File, FileStatus, Hash, time_utils};
 use anidb_client_core::database::repositories::Repository;
 use anidb_client_core::database::repositories::anidb_result::AniDBResultRepository;
 use anidb_client_core::database::repositories::file::FileRepository;
+use anidb_client_core::database::repositories::hash::HashRepository;
 use anidb_client_core::database::repositories::sync_queue::SyncQueueRepository;
+use anidb_client_core::hashing::HashAlgorithm;
 use anidb_client_core::identification::{
     FileIdentificationService, IdentificationOptions, IdentificationResult, IdentificationStatus,
     ServiceConfig,
@@ -53,6 +55,7 @@ pub struct DirectoryIdentifyOptions {
 pub struct IdentifyOrchestrator {
     cache_service: IdentificationCacheService,
     file_repo: Arc<FileRepository>,
+    hash_repo: Arc<HashRepository>,
     sync_repo: Arc<SyncQueueRepository>,
     verbose: bool,
 }
@@ -98,14 +101,16 @@ impl IdentifyOrchestrator {
         let cache_service =
             IdentificationCacheService::new(service, client, db_repo).with_verbose(verbose);
 
-        // Create file and sync queue repositories
+        // Create file, hash, and sync queue repositories
         let file_repo = Arc::new(FileRepository::new(db.pool().clone()));
+        let hash_repo = Arc::new(HashRepository::new(db.pool().clone()));
         let sync_repo = Arc::new(SyncQueueRepository::new(db.pool().clone()));
 
         debug!("Identify orchestrator created successfully with cache service");
         Ok(Self {
             cache_service,
             file_repo,
+            hash_repo,
             sync_repo,
             verbose,
         })
@@ -717,6 +722,21 @@ impl IdentifyOrchestrator {
                     self.file_repo.create(&file).await?
                 };
 
+            // Persist the ED2K hash from identification result
+            if let Some(ref file_info) = result.file {
+                let now = time_utils::now_millis();
+                let hash_record = Hash {
+                    id: 0,
+                    file_id: local_file_id,
+                    algorithm: HashAlgorithm::ED2K.to_string(),
+                    hash: file_info.ed2k.clone(),
+                    duration_ms: 0, // Duration not tracked during identification
+                    created_at: now,
+                };
+                self.hash_repo.create(&hash_record).await?;
+                debug!("Persisted ED2K hash for local file ID {}", local_file_id);
+            }
+
             debug!("Enqueueing local file ID {} to MyList", local_file_id);
             self.sync_repo
                 .enqueue(local_file_id, "mylist_add", 5)
@@ -748,13 +768,70 @@ impl IdentifyOrchestrator {
 
     /// Batch enqueue multiple files to MyList
     async fn batch_enqueue_to_mylist(&self, results: &[&IdentificationResult]) -> Result<()> {
-        let operations: Vec<(i64, String, i32)> = results
-            .iter()
-            .filter_map(|r| {
-                r.file_id()
-                    .map(|fid| (fid as i64, "mylist_add".to_string(), 5))
-            })
-            .collect();
+        use anidb_client_core::identification::IdentificationSource;
+
+        let mut operations: Vec<(i64, String, i32)> = Vec::new();
+        let now = time_utils::now_millis();
+
+        for result in results {
+            if result.file_id().is_none() {
+                continue;
+            }
+
+            // Extract file path from the identification source
+            let file_path = match &result.request.source {
+                IdentificationSource::FilePath(path) => path.clone(),
+                IdentificationSource::HashWithSize { .. } | IdentificationSource::FileId(_) => {
+                    debug!("Skipping batch enqueue for non-file-path identification");
+                    continue;
+                }
+            };
+
+            // Get or create the file in the local database
+            let local_file_id =
+                if let Some(existing_file) = self.file_repo.find_by_path(&file_path).await? {
+                    existing_file.id
+                } else {
+                    // File doesn't exist, create it
+                    let metadata = std::fs::metadata(&file_path)?;
+
+                    let file = File {
+                        id: 0,
+                        path: file_path.to_string_lossy().to_string(),
+                        size: metadata.len() as i64,
+                        modified_time: metadata
+                            .modified()
+                            .ok()
+                            .and_then(|t| t.duration_since(std::time::UNIX_EPOCH).ok())
+                            .map(|d| d.as_millis() as i64)
+                            .unwrap_or(now),
+                        inode: None,
+                        status: FileStatus::Processed,
+                        last_checked: now,
+                        created_at: now,
+                        updated_at: now,
+                    };
+
+                    self.file_repo.create(&file).await?
+                };
+
+            // Persist the ED2K hash from identification result
+            if let Some(ref file_info) = result.file {
+                let hash_record = Hash {
+                    id: 0,
+                    file_id: local_file_id,
+                    algorithm: HashAlgorithm::ED2K.to_string(),
+                    hash: file_info.ed2k.clone(),
+                    duration_ms: 0, // Duration not tracked during identification
+                    created_at: now,
+                };
+                self.hash_repo.create(&hash_record).await?;
+                debug!("Persisted ED2K hash for local file ID {}", local_file_id);
+            }
+
+            // Add to batch operation using local file_id (not AniDB fid)
+            operations.push((local_file_id, "mylist_add".to_string(), 5));
+        }
 
         if !operations.is_empty() {
             debug!("Batch enqueueing {} files to MyList", operations.len());
