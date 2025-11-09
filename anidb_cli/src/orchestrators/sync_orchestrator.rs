@@ -61,7 +61,7 @@ pub struct SyncOrchestrator {
 
 impl SyncOrchestrator {
     /// Create a new sync orchestrator
-    pub async fn new(_client_config: ClientConfig, options: SyncOptions) -> Result<Self> {
+    pub async fn new(client_config: ClientConfig, options: SyncOptions) -> Result<Self> {
         debug!("Creating sync orchestrator with options: {options:?}");
 
         // Get database path (XDG compliant, centralized)
@@ -85,7 +85,11 @@ impl SyncOrchestrator {
         let anidb_repo = Arc::new(AniDBResultRepository::new(db.pool().clone()));
 
         // Create protocol client
-        let protocol_config = ProtocolConfig::default();
+        let protocol_config = ProtocolConfig {
+            client_name: client_config.client_name.clone().unwrap_or_default(),
+            client_version: client_config.client_version.clone().unwrap_or_default(),
+            ..Default::default()
+        };
         let protocol_client = Arc::new(Mutex::new(
             ProtocolClient::new(protocol_config)
                 .await
