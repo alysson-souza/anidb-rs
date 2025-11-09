@@ -184,9 +184,26 @@ impl AniDBSyncService {
         // Ensure we're authenticated
         if !client.is_authenticated().await {
             // Try to authenticate using stored credentials
+            // List available accounts and use the first one (same pattern as identification)
+            let accounts = self
+                .credential_store
+                .list_accounts("anidb")
+                .await
+                .map_err(|e| {
+                    Error::Validation(ValidationError::invalid_configuration(&format!(
+                        "Failed to access credentials: {e}"
+                    )))
+                })?;
+
+            if accounts.is_empty() {
+                return Err(Error::Validation(ValidationError::invalid_configuration(
+                    "No AniDB credentials found. Please run 'anidb auth login' to authenticate first.",
+                )));
+            }
+
             let credentials = self
                 .credential_store
-                .retrieve("anidb", "default")
+                .retrieve("anidb", &accounts[0])
                 .await
                 .map_err(|e| {
                     Error::Validation(ValidationError::invalid_configuration(&format!(
@@ -292,9 +309,26 @@ impl AniDBSyncService {
 
         // Ensure we're authenticated
         if !client.is_authenticated().await {
+            // List available accounts and use the first one (same pattern as identification)
+            let accounts = self
+                .credential_store
+                .list_accounts("anidb")
+                .await
+                .map_err(|e| {
+                    Error::Validation(ValidationError::invalid_configuration(&format!(
+                        "Failed to access credentials: {e}"
+                    )))
+                })?;
+
+            if accounts.is_empty() {
+                return Err(Error::Validation(ValidationError::invalid_configuration(
+                    "No AniDB credentials found. Please run 'anidb auth login' to authenticate first.",
+                )));
+            }
+
             let credentials = self
                 .credential_store
-                .retrieve("anidb", "default")
+                .retrieve("anidb", &accounts[0])
                 .await
                 .map_err(|e| {
                     Error::Validation(ValidationError::invalid_configuration(&format!(
