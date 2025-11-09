@@ -4,6 +4,7 @@
 
 use crate::cache::traits::HashCache;
 use crate::cache::{CacheEntry, CacheKey, CacheStats};
+use crate::paths;
 use anidb_client_core::error::{Error, InternalError, Result};
 use anidb_client_core::hashing::HashResult;
 use async_trait::async_trait;
@@ -264,10 +265,8 @@ impl HashCache for FileCache {
 
 impl Default for FileCache {
     fn default() -> Self {
-        // Use default XDG data directory for cache
-        let cache_dir = dirs::data_dir()
-            .map(|d| d.join("anidb/cache"))
-            .unwrap_or_else(|| PathBuf::from(".anidb/cache"));
+        // Use centralized cache directory
+        let cache_dir = paths::get_cache_dir();
         Self::new(cache_dir).unwrap()
     }
 }

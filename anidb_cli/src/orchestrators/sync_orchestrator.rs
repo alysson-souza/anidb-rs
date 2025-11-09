@@ -3,6 +3,7 @@
 //! This module handles the business logic for MyList synchronization,
 //! coordinating between the CLI and core sync service.
 
+use crate::paths;
 use crate::progress::{create_progress_infrastructure, render_progress};
 use crate::sync::{AniDBSyncService, ProcessResult, SyncService, SyncServiceConfig};
 use anidb_client_core::database::repositories::{
@@ -63,16 +64,16 @@ impl SyncOrchestrator {
     pub async fn new(_client_config: ClientConfig, options: SyncOptions) -> Result<Self> {
         debug!("Creating sync orchestrator with options: {options:?}");
 
-        // Get data directory (XDG compliant)
-        let data_dir = dirs::data_dir()
-            .map(|d| d.join("anidb"))
-            .unwrap_or_else(|| std::path::PathBuf::from(".anidb"));
+        // Get database path (XDG compliant, centralized)
+        let db_path = paths::get_database_path();
 
         // Ensure data directory exists
-        std::fs::create_dir_all(&data_dir).context("Failed to create data directory")?;
-
-        // Open database
-        let db_path = data_dir.join("anidb.db");
+        std::fs::create_dir_all(
+            db_path
+                .parent()
+                .unwrap_or_else(|| std::path::Path::new(".")),
+        )
+        .context("Failed to create data directory")?;
         let db = Database::new(&db_path)
             .await
             .context("Failed to open database")?;
@@ -386,16 +387,16 @@ impl SyncOrchestrator {
 pub async fn retry_failed(_client_config: ClientConfig, options: SyncOptions) -> Result<()> {
     debug!("Retrying failed sync items");
 
-    // Get data directory (XDG compliant)
-    let data_dir = dirs::data_dir()
-        .map(|d| d.join("anidb"))
-        .unwrap_or_else(|| std::path::PathBuf::from(".anidb"));
+    // Get database path (XDG compliant, centralized)
+    let db_path = paths::get_database_path();
 
     // Ensure data directory exists
-    std::fs::create_dir_all(&data_dir).context("Failed to create data directory")?;
-
-    // Open database
-    let db_path = data_dir.join("anidb.db");
+    std::fs::create_dir_all(
+        db_path
+            .parent()
+            .unwrap_or_else(|| std::path::Path::new(".")),
+    )
+    .context("Failed to create data directory")?;
     let db = Database::new(&db_path)
         .await
         .context("Failed to open database")?;

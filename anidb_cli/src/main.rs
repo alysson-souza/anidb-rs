@@ -11,6 +11,7 @@ mod cache;
 mod config;
 mod file_discovery;
 mod orchestrators;
+mod paths;
 mod progress;
 mod sync;
 mod terminal;
@@ -395,10 +396,8 @@ async fn hash_command(
         // Use no-op cache when caching is disabled
         CacheFactory::noop()?
     } else {
-        // Get data directory for cache (XDG compliant)
-        let cache_dir = dirs::data_dir()
-            .map(|d| d.join("anidb/cache"))
-            .unwrap_or_else(|| std::path::PathBuf::from(".anidb/cache"));
+        // Use centralized cache directory (XDG compliant)
+        let cache_dir = paths::get_cache_dir();
         // Use file cache with the configured cache directory
         CacheFactory::file(cache_dir)?
     };

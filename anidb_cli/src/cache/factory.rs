@@ -6,6 +6,7 @@
 use crate::cache::memory_cache::MemoryCacheConfig;
 use crate::cache::traits::HashCache;
 use crate::cache::{file_cache::FileCache, memory_cache::MemoryCache, noop_cache::NoOpCache};
+use crate::paths;
 use anidb_client_core::error::Result;
 use std::path::PathBuf;
 use std::sync::Arc;
@@ -33,10 +34,8 @@ pub enum CacheConfig {
 
 impl Default for CacheConfig {
     fn default() -> Self {
-        // Use default XDG data directory for cache
-        let cache_dir = dirs::data_dir()
-            .map(|d| d.join("anidb/cache"))
-            .unwrap_or_else(|| PathBuf::from(".anidb/cache"));
+        // Use centralized cache directory
+        let cache_dir = paths::get_cache_dir();
         Self::File {
             cache_dir,
             max_entries: None,

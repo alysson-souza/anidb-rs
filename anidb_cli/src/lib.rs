@@ -4,6 +4,7 @@ pub mod error;
 pub mod file_discovery;
 pub mod orchestrators;
 pub mod output;
+pub mod paths;
 pub mod progress;
 pub mod sync;
 pub mod terminal;

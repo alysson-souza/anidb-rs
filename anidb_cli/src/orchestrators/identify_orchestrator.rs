@@ -4,6 +4,7 @@
 //! coordinating between the CLI and core identification service.
 
 use crate::cache::IdentificationCacheService;
+use crate::paths;
 use crate::progress::{create_progress_infrastructure, render_progress};
 use crate::terminal;
 use anidb_client_core::api::AniDBClient;
@@ -82,11 +83,8 @@ impl IdentifyOrchestrator {
         );
 
         // Determine database path
-        let data_dir = dirs::data_dir()
-            .map(|d| d.join("anidb-cli"))
-            .unwrap_or_else(|| PathBuf::from(".anidb"));
-        std::fs::create_dir_all(&data_dir).ok();
-        let db_path = data_dir.join("anidb.db");
+        let db_path = paths::get_database_path();
+        std::fs::create_dir_all(db_path.parent().unwrap_or(&PathBuf::from("."))).ok();
 
         debug!("Creating database at: {}", db_path.display());
         let db = Database::new(&db_path)
