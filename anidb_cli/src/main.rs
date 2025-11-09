@@ -128,6 +128,13 @@ enum Commands {
 
 #[derive(Subcommand)]
 enum ConfigCommand {
+    /// Interactive setup for required AniDB credentials and client info
+    Init {
+        /// Reconfigure even if already set up
+        #[arg(short, long)]
+        force: bool,
+    },
+
     /// Get a configuration value
     Get {
         /// Configuration key (e.g., client.memory_limit_mb)
@@ -556,6 +563,9 @@ async fn config_command(command: ConfigCommand) -> Result<()> {
     let mut manager = ConfigManager::new();
 
     match command {
+        ConfigCommand::Init { force } => {
+            config::interactive_init(force).await?;
+        }
         ConfigCommand::Get { key } => match manager.get(&key) {
             Ok(value) => {
                 println!("{value}");

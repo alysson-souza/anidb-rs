@@ -17,11 +17,13 @@ git clone git@github.com:alysson-souza/anidb-rs.git
 cd anidb-rs
 cargo install --path anidb_cli
 
+# Initial setup (requires AniDB account)
+anidb config init
+
 # Hash files
 anidb hash ~/Anime --recursive --algorithm ed2k
 
 # Identify files
-anidb auth login
 anidb identify ./episodes --recursive
 
 # Sync MyList
@@ -41,6 +43,8 @@ anidb sync all --dry-run
 
 **Common flags:** `--recursive`, `--format text/json/csv`, `--include/--exclude`, `--no-cache`, `--debug`, `--verbose`
 
+**Setup:** Run `anidb config init` to interactively configure AniDB credentials and client registration. Client name is case-sensitive. Register your client at https://anidb.net/software/add.
+
 ## Configuration
 
 Configuration is loaded in order: defaults → config file → environment variables → CLI flags.
@@ -55,11 +59,11 @@ Configuration is loaded in order: defaults → config file → environment varia
 
 ```toml
 [client]
+client_name = "yourclient"   # Required: AniDB API client (case-sensitive)
+client_version = "1"         # Required: AniDB API client version
 max_concurrent_files = 4
 chunk_size = 65536           # 64 KB
 max_memory_usage = 524288000 # 500 MB
-client_name = "yourclient"   # Required for AniDB API authentication
-client_version = "1"         # Client version for AniDB API
 
 [network]
 timeout_seconds = 30

@@ -1,5 +1,8 @@
 use anidb_client_core::ClientConfig;
+use anidb_client_core::security::{Credential, SecureString, create_credential_store};
 use anyhow::{Context, Result};
+use colored::Colorize;
+use dialoguer::{Confirm, Input, Password};
 use figment::{
     Figment,
     providers::{Env, Format, Serialized, Toml},
@@ -318,6 +321,10 @@ impl ConfigManager {
                     .context("Expected boolean value (true/false)")?;
                 Ok(toml::Value::Boolean(bool_val))
             }
+            // Force string types for these fields
+            k if k == "client.client_name" || k == "client.client_version" => {
+                Ok(toml::Value::String(value.to_string()))
+            }
             _ => {
                 // Try parsing as different types
                 if let Ok(b) = value.parse::<bool>() {
@@ -345,4 +352,143 @@ pub fn get_config() -> Result<AppConfig, Box<figment::Error>> {
 #[allow(dead_code)]
 pub fn get_config_path() -> PathBuf {
     ConfigManager::new().get_config_path()
+}
+
+/// Interactive setup wizard for required AniDB credentials and client info
+pub async fn interactive_init(force: bool) -> Result<()> {
+    println!("{}", "AniDB CLI Setup".bold());
+    println!("{}", "===============".bold());
+    println!();
+
+    // Check if already configured
+    if !force && is_configured().await? {
+        let reconfigure = Confirm::new()
+            .with_prompt("Configuration already exists. Reconfigure?")
+            .default(false)
+            .interact()
+            .context("Failed to read input")?;
+
+        if !reconfigure {
+            println!("Setup cancelled.");
+            return Ok(());
+        }
+    }
+
+    println!("This tool requires:");
+    println!("  • An AniDB account (create at https://anidb.net)");
+    println!("  • A registered API client (register at https://anidb.net/software/add)");
+    println!();
+
+    // Step 1: Credentials
+    println!("{}", "AniDB Credentials".bold());
+
+    // Check if credentials already exist
+    let store = create_credential_store()
+        .await
+        .context("Failed to create credential store")?;
+    let existing_accounts = store
+        .list_accounts("anidb")
+        .await
+        .context("Failed to list existing accounts")?;
+
+    let default_username = existing_accounts.first().cloned();
+
+    let username: String = if let Some(ref existing) = default_username {
+        Input::new()
+            .with_prompt("Username")
+            .default(existing.clone())
+            .interact_text()
+            .context("Failed to read username")?
+    } else {
+        Input::new()
+            .with_prompt("Username")
+            .interact_text()
+            .context("Failed to read username")?
+    };
+
+    let password = Password::new()
+        .with_prompt("Password")
+        .interact()
+        .context("Failed to read password")?;
+
+    // Store credentials securely
+    let credential = Credential::new("anidb", &username, SecureString::new(password));
+    store
+        .store(&credential)
+        .await
+        .context("Failed to store credentials")?;
+
+    println!();
+
+    // Step 2: Client info
+    println!("{}", "Client Registration".bold());
+    println!("Register your client at: https://anidb.net/software/add");
+    println!("Note: Client name is case sensitive");
+    println!();
+
+    // Load existing config for defaults
+    let mut config_mgr = ConfigManager::new();
+    let current = config_mgr.load().ok();
+
+    let default_name = current
+        .as_ref()
+        .and_then(|c| c.client.client_name.clone())
+        .unwrap_or_else(|| "anidbrs".to_string());
+
+    let default_version = current
+        .as_ref()
+        .and_then(|c| c.client.client_version.clone())
+        .unwrap_or_else(|| "1".to_string());
+
+    let client_name: String = Input::new()
+        .with_prompt("Client name")
+        .default(default_name)
+        .interact_text()
+        .context("Failed to read client name")?;
+
+    let client_version: String = Input::new()
+        .with_prompt("Client version")
+        .default(default_version)
+        .validate_with(|input: &String| -> Result<(), &str> {
+            input
+                .parse::<u32>()
+                .map(|_| ())
+                .map_err(|_| "Must be a positive integer")
+        })
+        .interact_text()
+        .context("Failed to read client version")?;
+
+    // Save configuration
+    config_mgr.set("client.client_name", &client_name)?;
+    config_mgr.set("client.client_version", &client_version)?;
+
+    println!();
+    println!("{}", "✓ Configuration saved".green());
+    println!();
+    println!("You can now use:");
+    println!("  anidb identify <file>  - Identify anime files");
+    println!("  anidb sync             - Sync with MyList");
+
+    Ok(())
+}
+
+/// Check if configuration is already set up
+async fn is_configured() -> Result<bool> {
+    // Check credentials
+    let store = create_credential_store()
+        .await
+        .context("Failed to create credential store")?;
+    let accounts = store
+        .list_accounts("anidb")
+        .await
+        .context("Failed to list accounts")?;
+
+    // Check client config
+    let config = ConfigManager::new().load().ok();
+    let has_client = config
+        .as_ref()
+        .and_then(|c| c.client.client_name.as_ref())
+        .is_some();
+
+    Ok(!accounts.is_empty() && has_client)
 }
