@@ -117,13 +117,16 @@ impl IdentifyOrchestrator {
     }
 
     /// Identify a single file
+    /// This is used by identify_directory and does NOT prompt for MyList (deferred to batch)
     pub async fn identify_file(
         &self,
         path: &Path,
         format: OutputFormat,
         no_cache: bool,
     ) -> Result<IdentificationResult> {
-        self.identify_file_with_mylist(path, format, no_cache, false, false)
+        // Call with no_mylist=true to skip per-file MyList prompting
+        // MyList handling will be done at batch level by identify_directory
+        self.identify_file_with_mylist(path, format, no_cache, false, true)
             .await
     }
 
@@ -733,15 +736,26 @@ impl IdentifyOrchestrator {
                     duration_ms: 0, // Duration not tracked during identification
                     created_at: now,
                 };
-                self.hash_repo.create(&hash_record).await?;
+                self.hash_repo.upsert(&hash_record).await?;
                 debug!("Persisted ED2K hash for local file ID {}", local_file_id);
             }
 
             debug!("Enqueueing local file ID {} to MyList", local_file_id);
-            self.sync_repo
+            let queue_id_before = self.sync_repo.count().await?;
+
+            let _queue_id = self
+                .sync_repo
                 .enqueue(local_file_id, "mylist_add", 5)
                 .await?;
-            eprintln!("{}", "✓ Added to MyList sync queue".green());
+
+            let queue_id_after = self.sync_repo.count().await?;
+
+            // Check if this was a new entry or already existed
+            if queue_id_after > queue_id_before {
+                eprintln!("{}", "✓ Added to MyList sync queue".green());
+            } else {
+                eprintln!("{}", "✓ Already in MyList sync queue".yellow());
+            }
         }
         Ok(())
     }
@@ -825,7 +839,7 @@ impl IdentifyOrchestrator {
                     duration_ms: 0, // Duration not tracked during identification
                     created_at: now,
                 };
-                self.hash_repo.create(&hash_record).await?;
+                self.hash_repo.upsert(&hash_record).await?;
                 debug!("Persisted ED2K hash for local file ID {}", local_file_id);
             }
 
@@ -835,11 +849,25 @@ impl IdentifyOrchestrator {
 
         if !operations.is_empty() {
             debug!("Batch enqueueing {} files to MyList", operations.len());
-            self.sync_repo.batch_enqueue(&operations).await?;
-            eprintln!(
-                "{}",
-                format!("✓ Added {} files to MyList sync queue", operations.len()).green()
-            );
+            let newly_queued_ids = self.sync_repo.batch_enqueue(&operations).await?;
+            let newly_queued_count = newly_queued_ids.len();
+            let already_queued_count = operations.len() - newly_queued_count;
+
+            if already_queued_count > 0 {
+                eprintln!(
+                    "{}",
+                    format!(
+                        "✓ Added {} files to MyList sync queue ({} already queued)",
+                        newly_queued_count, already_queued_count
+                    )
+                    .green()
+                );
+            } else {
+                eprintln!(
+                    "{}",
+                    format!("✓ Added {} files to MyList sync queue", newly_queued_count).green()
+                );
+            }
         }
 
         Ok(())

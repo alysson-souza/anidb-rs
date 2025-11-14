@@ -459,7 +459,8 @@ impl MockClientBuilder {
             latency: Duration::from_millis(50),
             failure_rate: 0.0,
             offline: false,
-            rate_limit: Some(Duration::from_millis(2000)), // AniDB rate limit
+            // Simulated AniDB rate limit between requests (safer 2.5s)
+            rate_limit: Some(Duration::from_millis(2500)),
         }
     }
 }

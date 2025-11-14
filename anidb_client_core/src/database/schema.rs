@@ -3,7 +3,7 @@
 //! This module contains all SQL schema definitions for the AniDB client database.
 
 /// Current schema version
-pub const CURRENT_SCHEMA_VERSION: i32 = 3;
+pub const CURRENT_SCHEMA_VERSION: i32 = 4;
 
 /// Initial schema creation SQL
 pub const SCHEMA_V1: &str = r#"
@@ -221,4 +221,25 @@ ALTER TABLE anidb_results ADD COLUMN mylist_lid INTEGER;
 
 -- Create index for mylist_lid lookups
 CREATE INDEX IF NOT EXISTS idx_anidb_results_mylist_lid ON anidb_results(mylist_lid);
+"#;
+
+/// Schema v4: Add deduplication and UNIQUE constraint for sync queue
+/// This migration deduplicates existing pending operations and adds a partial UNIQUE index
+/// to prevent duplicate pending operations for the same file_id + operation_type
+pub const SCHEMA_V4: &str = r#"
+-- Step 1: Deduplicate existing sync_queue entries
+-- Keep only the oldest entry for each (file_id, operation, status='pending') combination
+DELETE FROM sync_queue
+WHERE id NOT IN (
+    SELECT MIN(id)
+    FROM sync_queue
+    WHERE status = 'pending'
+    GROUP BY file_id, operation
+);
+
+-- Step 2: Create a partial unique index to prevent future duplicates
+-- Only enforce uniqueness for pending operations (completed/failed can have duplicates for history)
+CREATE UNIQUE INDEX IF NOT EXISTS idx_sync_queue_unique_pending 
+ON sync_queue(file_id, operation) 
+WHERE status = 'pending';
 "#;

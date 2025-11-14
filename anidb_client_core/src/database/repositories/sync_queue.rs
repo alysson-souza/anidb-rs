@@ -188,7 +188,28 @@ impl SyncQueueRepository {
     }
 
     /// Enqueue a new operation
+    /// Returns the queue ID - if an identical pending operation already exists, returns that ID
     pub async fn enqueue(&self, file_id: i64, operation: &str, priority: i32) -> Result<i64> {
+        // Check if a pending operation already exists for this file_id + operation
+        let existing = sqlx::query(
+            r#"
+            SELECT id FROM sync_queue
+            WHERE file_id = ? AND operation = ? AND status = ?
+            LIMIT 1
+            "#,
+        )
+        .bind(file_id)
+        .bind(operation)
+        .bind(SyncStatus::Pending)
+        .fetch_optional(&self.pool)
+        .await?;
+
+        if let Some(row) = existing {
+            // Return existing queue ID (deduplicated)
+            return Ok(row.try_get("id")?);
+        }
+
+        // No existing pending operation, create new one
         let now = time_utils::now_millis();
 
         let item = SyncQueueItem {
@@ -219,17 +240,48 @@ impl SyncQueueRepository {
     }
 
     /// Batch enqueue operations
+    /// Returns only the IDs of newly created queue entries (skips duplicates)
     pub async fn batch_enqueue(&self, items: &[(i64, String, i32)]) -> Result<Vec<i64>> {
         if items.is_empty() {
             return Ok(Vec::new());
         }
 
         let mut tx = self.pool.begin().await?;
-        let mut ids = Vec::with_capacity(items.len());
         let now = time_utils::now_millis();
 
+        // First, check which items already have pending operations
+        let mut to_insert = Vec::new();
+        let mut already_queued = 0;
+
+        for (file_id, operation, priority) in items {
+            // Check if already pending
+            let existing = sqlx::query_scalar::<_, i64>(
+                "SELECT id FROM sync_queue WHERE file_id = ? AND operation = ? AND status = ? LIMIT 1",
+            )
+            .bind(file_id)
+            .bind(operation)
+            .bind(SyncStatus::Pending)
+            .fetch_optional(&mut *tx)
+            .await?;
+
+            if existing.is_none() {
+                to_insert.push((*file_id, operation.clone(), *priority));
+            } else {
+                already_queued += 1;
+            }
+        }
+
+        if to_insert.is_empty() {
+            // All items were already queued
+            tx.commit().await?;
+            return Ok(Vec::new());
+        }
+
+        // Insert only the non-duplicate items
+        let mut ids = Vec::with_capacity(to_insert.len());
+
         // Process in chunks to avoid SQL query size limits
-        for chunk in items.chunks(500) {
+        for chunk in to_insert.chunks(500) {
             // Build multi-value insert query
             let mut query = String::from(
                 r#"INSERT INTO sync_queue (
@@ -271,6 +323,16 @@ impl SyncQueueRepository {
         }
 
         tx.commit().await?;
+
+        // Log deduplication stats if any were skipped
+        if already_queued > 0 {
+            log::debug!(
+                "Batch enqueue: {} newly queued, {} already queued (deduplicated)",
+                ids.len(),
+                already_queued
+            );
+        }
+
         Ok(ids)
     }
 

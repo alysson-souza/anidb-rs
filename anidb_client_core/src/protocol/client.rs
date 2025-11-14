@@ -69,7 +69,8 @@ struct RateLimiter {
 
 impl RateLimiter {
     fn new() -> Self {
-        // 0.5 requests per second = 2 seconds between requests
+        // Respect AniDB guidance: at least 2.0s between requests.
+        // We use 0.4 requests per second = 2.5 seconds between requests (safer margin).
         let min_delay =
             Duration::from_secs_f64(1.0 / crate::protocol::RATE_LIMIT_REQUESTS_PER_SECOND);
 

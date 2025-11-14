@@ -7,7 +7,7 @@ use crate::{Error, Result, error::InternalError};
 use sqlx::SqlitePool;
 use std::time::{SystemTime, UNIX_EPOCH};
 
-use super::schema::{MIGRATION_FROM_HASH_CACHE, SCHEMA_V1, SCHEMA_V2, SCHEMA_V3};
+use super::schema::{MIGRATION_FROM_HASH_CACHE, SCHEMA_V1, SCHEMA_V2, SCHEMA_V3, SCHEMA_V4};
 
 /// Run all necessary migrations
 pub async fn run_migrations(pool: &SqlitePool) -> Result<()> {
@@ -32,6 +32,11 @@ pub async fn run_migrations(pool: &SqlitePool) -> Result<()> {
     // Apply v3 migration for mylist_lid tracking
     if current_version < 3 {
         apply_migration_v3(pool).await?;
+    }
+
+    // Apply v4 migration for sync queue deduplication and constraint
+    if current_version < 4 {
+        apply_migration(pool, 4, SCHEMA_V4).await?;
     }
 
     Ok(())
