@@ -94,7 +94,7 @@ Napi::Object Init(Napi::Env env, Napi::Object exports) {
     
     // Set up cleanup on process exit
     env.SetInstanceData(nullptr, [](Napi::Env env, void* data) {
-        anidb_cleanup();
+        anidb_cleanup(nullptr);
     });
     
     return exports;

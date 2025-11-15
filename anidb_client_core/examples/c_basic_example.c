@@ -41,7 +41,7 @@ int main(int argc, char* argv[]) {
     if (result != ANIDB_SUCCESS) {
         fprintf(stderr, "Failed to create client: %s\n", 
                 anidb_error_string(result));
-        anidb_cleanup();
+        anidb_cleanup(NULL);
         return 1;
     }
     
@@ -113,7 +113,7 @@ int main(int argc, char* argv[]) {
     // Cleanup
     printf("\nCleaning up...\n");
     anidb_client_destroy(client);
-    anidb_cleanup();
+    anidb_cleanup(NULL);
     
     printf("Done!\n");
     return 0;

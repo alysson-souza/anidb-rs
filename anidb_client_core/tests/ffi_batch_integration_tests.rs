@@ -7,6 +7,7 @@ use anidb_client_core::ffi::{
     anidb_cleanup, anidb_client_create, anidb_client_create_with_config, anidb_client_destroy,
     anidb_init,
 };
+use anidb_test_utils::TestContextGuard;
 use std::ffi::CString;
 use std::fs;
 use std::path::PathBuf;
@@ -18,8 +19,10 @@ use tempfile::TempDir;
 
 /// Test batch processing with multiple files
 #[test]
-#[serial_test::serial]
+// Parallel test with isolated context
 fn test_ffi_batch_processing_basic() {
+    let _ctx = TestContextGuard::new();
+
     assert_eq!(anidb_init(1), AniDBResult::Success);
 
     let temp_dir = TempDir::new().unwrap();
@@ -182,13 +185,15 @@ fn test_ffi_batch_processing_basic() {
     }
 
     anidb_client_destroy(client_handle);
-    anidb_cleanup();
+    anidb_cleanup(std::ptr::null_mut());
 }
 
 /// Test batch processing with error handling
 #[test]
-#[serial_test::serial]
+// Parallel test with isolated context
 fn test_ffi_batch_error_handling() {
+    let _ctx = TestContextGuard::new();
+
     assert_eq!(anidb_init(1), AniDBResult::Success);
 
     let temp_dir = TempDir::new().unwrap();
@@ -264,13 +269,15 @@ fn test_ffi_batch_error_handling() {
     }
 
     anidb_client_destroy(client_handle);
-    anidb_cleanup();
+    anidb_cleanup(std::ptr::null_mut());
 }
 
 /// Test concurrent batch processing
 #[test]
-#[serial_test::serial]
+// Parallel test with isolated context
 fn test_ffi_concurrent_batch_processing() {
+    let _ctx = TestContextGuard::new();
+
     assert_eq!(anidb_init(1), AniDBResult::Success);
 
     let temp_dir = TempDir::new().unwrap();
@@ -350,13 +357,15 @@ fn test_ffi_concurrent_batch_processing() {
         "All files should be processed"
     );
 
-    anidb_cleanup();
+    anidb_cleanup(std::ptr::null_mut());
 }
 
 /// Test batch processing with memory constraints
 #[test]
-#[serial_test::serial]
+// Parallel test with isolated context
 fn test_ffi_batch_memory_constraints() {
+    let _ctx = TestContextGuard::new();
+
     assert_eq!(anidb_init(1), AniDBResult::Success);
 
     let temp_dir = TempDir::new().unwrap();
@@ -465,8 +474,10 @@ fn test_ffi_batch_memory_constraints() {
 /// Hash caching now lives in higher-layer clients (e.g., CLI). This test simply ensures that
 /// repeated processing of the same files through the FFI remains stable and deterministic.
 #[test]
-#[serial_test::serial]
+// Parallel test with isolated context
 fn test_ffi_batch_repeat_processing_without_cache() {
+    let _ctx = TestContextGuard::new();
+
     assert_eq!(anidb_init(1), AniDBResult::Success);
 
     let temp_dir = TempDir::new().unwrap();

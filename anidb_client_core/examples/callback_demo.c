@@ -73,7 +73,7 @@ int main(int argc, char* argv[]) {
     anidb_client_handle_t client = NULL;
     if (anidb_client_create(&client) != ANIDB_SUCCESS) {
         fprintf(stderr, "Failed to create client\n");
-        anidb_cleanup();
+        anidb_cleanup(NULL);
         return 1;
     }
     
@@ -137,7 +137,7 @@ int main(int argc, char* argv[]) {
     anidb_unregister_callback(client, error_id);
     anidb_unregister_callback(client, completion_id);
     anidb_client_destroy(client);
-    anidb_cleanup();
+    anidb_cleanup(NULL);
     
     return 0;
 }

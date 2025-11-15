@@ -3,7 +3,7 @@
 //! This module manages the event system including event creation,
 //! queueing, callbacks, and event polling functionality.
 
-use crate::ffi::handles::{CLIENTS, ClientState, EventEntry};
+use crate::ffi::handles::{ClientState, EventEntry, resolve_client};
 use crate::ffi::helpers::{get_timestamp_ms, validate_mut_ptr};
 use crate::ffi::types::{
     AniDBEvent, AniDBEventCallback, AniDBEventData, AniDBEventType, AniDBHashAlgorithm,
@@ -161,21 +161,11 @@ pub extern "C" fn anidb_event_connect(
         }
 
         let handle_id = handle as usize;
-        if handle_id == 0 || handle_id > usize::MAX / 2 {
-            return AniDBResult::ErrorInvalidHandle;
-        }
 
-        let clients = match CLIENTS.read() {
-            Ok(c) => c,
-            Err(_) => return AniDBResult::ErrorBusy,
+        let client_arc = match resolve_client(handle_id) {
+            Ok(client) => client,
+            Err(err) => return err,
         };
-
-        let client_arc = match clients.get(&handle_id) {
-            Some(c) => c.clone(),
-            None => return AniDBResult::ErrorInvalidHandle,
-        };
-
-        drop(clients);
 
         let client = match client_arc.lock() {
             Ok(c) => c,
@@ -242,21 +232,11 @@ pub extern "C" fn anidb_event_disconnect(handle: *mut c_void) -> AniDBResult {
         }
 
         let handle_id = handle as usize;
-        if handle_id == 0 || handle_id > usize::MAX / 2 {
-            return AniDBResult::ErrorInvalidHandle;
-        }
 
-        let clients = match CLIENTS.read() {
-            Ok(c) => c,
-            Err(_) => return AniDBResult::ErrorBusy,
+        let client_arc = match resolve_client(handle_id) {
+            Ok(client) => client,
+            Err(err) => return err,
         };
-
-        let client_arc = match clients.get(&handle_id) {
-            Some(c) => c.clone(),
-            None => return AniDBResult::ErrorInvalidHandle,
-        };
-
-        drop(clients);
 
         let client = match client_arc.lock() {
             Ok(c) => c,
@@ -306,21 +286,11 @@ pub extern "C" fn anidb_event_poll(
         }
 
         let handle_id = handle as usize;
-        if handle_id == 0 || handle_id > usize::MAX / 2 {
-            return AniDBResult::ErrorInvalidHandle;
-        }
 
-        let clients = match CLIENTS.read() {
-            Ok(c) => c,
-            Err(_) => return AniDBResult::ErrorBusy,
+        let client_arc = match resolve_client(handle_id) {
+            Ok(client) => client,
+            Err(err) => return err,
         };
-
-        let client_arc = match clients.get(&handle_id) {
-            Some(c) => c.clone(),
-            None => return AniDBResult::ErrorInvalidHandle,
-        };
-
-        drop(clients);
 
         let client = match client_arc.lock() {
             Ok(c) => c,

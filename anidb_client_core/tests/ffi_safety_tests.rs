@@ -12,6 +12,7 @@ use anidb_client_core::ffi::{
     anidb_client_create, anidb_client_create_with_config, anidb_client_destroy,
     anidb_client_get_last_error, anidb_free_file_result, anidb_init, anidb_process_file,
 };
+use anidb_test_utils::TestContextGuard;
 use std::ffi::{CString, c_char};
 use std::ptr;
 use std::sync::Arc;
@@ -21,8 +22,10 @@ use tempfile::TempDir;
 
 /// Test null pointer validation for all FFI entry points
 #[test]
-#[serial_test::serial]
+// Parallel test with isolated context
 fn test_comprehensive_null_pointer_checks() {
+    let _ctx = TestContextGuard::new();
+
     let _ = anidb_init(1);
 
     // Test anidb_client_create_with_config with null config
@@ -104,8 +107,10 @@ fn test_comprehensive_null_pointer_checks() {
 
 /// Test buffer overflow prevention
 #[test]
-#[serial_test::serial]
+// Parallel test with isolated context
 fn test_buffer_overflow_prevention() {
+    let _ctx = TestContextGuard::new();
+
     let _ = anidb_init(1);
 
     let mut handle: *mut std::ffi::c_void = ptr::null_mut();
@@ -152,8 +157,10 @@ fn test_buffer_overflow_prevention() {
 
 /// Test that panics don't cross the FFI boundary
 #[test]
-#[serial_test::serial]
+// Parallel test with isolated context
 fn test_panic_catching() {
+    let _ctx = TestContextGuard::new();
+
     let _ = anidb_init(1);
 
     // Test with invalid UTF-8 in string parameters
@@ -216,8 +223,10 @@ fn test_panic_catching() {
 
 /// Test memory leak prevention with proper cleanup paths
 #[test]
-#[serial_test::serial]
+// Parallel test with isolated context
 fn test_memory_leak_prevention() {
+    let _ctx = TestContextGuard::new();
+
     let _ = anidb_init(1);
 
     // Test creating and destroying multiple clients
@@ -264,8 +273,10 @@ fn test_memory_leak_prevention() {
 
 /// Test thread safety of FFI functions
 #[test]
-#[serial_test::serial]
+// Parallel test with isolated context
 fn test_thread_safety() {
+    let _ctx = TestContextGuard::new();
+
     let _ = anidb_init(1);
 
     let temp_dir = TempDir::new().unwrap();
@@ -346,8 +357,10 @@ fn test_thread_safety() {
 
 /// Test validation of algorithm arrays
 #[test]
-#[serial_test::serial]
+// Parallel test with isolated context
 fn test_algorithm_array_validation() {
+    let _ctx = TestContextGuard::new();
+
     let _ = anidb_init(1);
 
     let mut handle: *mut std::ffi::c_void = ptr::null_mut();
@@ -378,8 +391,10 @@ fn test_algorithm_array_validation() {
 
 /// Test that all entry points are wrapped with catch_unwind
 #[test]
-#[serial_test::serial]
+// Parallel test with isolated context
 fn test_all_functions_catch_panic() {
+    let _ctx = TestContextGuard::new();
+
     // This test verifies that panics are caught at the FFI boundary
     // We can't easily trigger panics in well-written code, but we verify
     // that the functions handle edge cases without panicking

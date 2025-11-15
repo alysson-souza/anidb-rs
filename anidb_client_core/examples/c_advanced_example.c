@@ -230,8 +230,8 @@ int main(int argc, char* argv[]) {
     anidb_result_t result = anidb_client_create_with_config(&config, &client);
     if (result != ANIDB_SUCCESS) {
         fprintf(stderr, "Failed to create client: %s\n", 
-                anidb_error_string(result));
-        anidb_cleanup();
+            anidb_error_string(result));
+        anidb_cleanup(NULL);
         return 1;
     }
     
@@ -334,7 +334,7 @@ int main(int argc, char* argv[]) {
     
     // Destroy client and cleanup library
     anidb_client_destroy(client);
-    anidb_cleanup();
+    anidb_cleanup(NULL);
     
     printf("Done!\n");
     return 0;

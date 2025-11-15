@@ -11,6 +11,7 @@ use anidb_client_core::ffi::{
     anidb_free_file_result, anidb_init, anidb_process_file, anidb_register_callback,
     anidb_unregister_callback,
 };
+use anidb_test_utils::TestContextGuard;
 use std::ffi::{CStr, CString};
 use std::ptr;
 use std::sync::atomic::{AtomicBool, AtomicU32, AtomicU64, Ordering};
@@ -100,8 +101,10 @@ extern "C" fn event_callback(event: *const AniDBEvent, user_data: *mut std::ffi:
 
 /// Test basic callback registration and unregistration
 #[test]
-#[serial_test::serial]
+// Parallel test with isolated context
 fn test_callback_registration() {
+    let _ctx = TestContextGuard::new();
+
     anidb_init(1);
 
     let mut handle: *mut std::ffi::c_void = ptr::null_mut();
@@ -146,13 +149,15 @@ fn test_callback_registration() {
     );
 
     assert_eq!(anidb_client_destroy(handle), AniDBResult::Success);
-    anidb_cleanup();
+    anidb_cleanup(std::ptr::null_mut());
 }
 
 /// Test progress callbacks during file processing
 #[test]
-#[serial_test::serial]
+// Parallel test with isolated context
 fn test_progress_callbacks() {
+    let _ctx = TestContextGuard::new();
+
     anidb_init(1);
 
     let temp_dir = TempDir::new().unwrap();
@@ -215,13 +220,15 @@ fn test_progress_callbacks() {
         anidb_free_file_result(result);
     }
     assert_eq!(anidb_client_destroy(handle), AniDBResult::Success);
-    anidb_cleanup();
+    anidb_cleanup(std::ptr::null_mut());
 }
 
 /// Test error callbacks
 #[test]
-#[serial_test::serial]
+// Parallel test with isolated context
 fn test_error_callbacks() {
+    let _ctx = TestContextGuard::new();
+
     anidb_init(1);
 
     let mut handle: *mut std::ffi::c_void = ptr::null_mut();
@@ -275,13 +282,15 @@ fn test_error_callbacks() {
     assert!(!context.error_messages.lock().unwrap().is_empty());
 
     assert_eq!(anidb_client_destroy(handle), AniDBResult::Success);
-    anidb_cleanup();
+    anidb_cleanup(std::ptr::null_mut());
 }
 
 /// Test event system with multiple events
 #[test]
-#[serial_test::serial]
+// Parallel test with isolated context
 fn test_event_system() {
+    let _ctx = TestContextGuard::new();
+
     anidb_init(1);
 
     let mut handle: *mut std::ffi::c_void = ptr::null_mut();
@@ -352,13 +361,15 @@ fn test_event_system() {
         anidb_free_file_result(result);
     }
     assert_eq!(anidb_client_destroy(handle), AniDBResult::Success);
-    anidb_cleanup();
+    anidb_cleanup(std::ptr::null_mut());
 }
 
 /// Test callback with context data
 #[test]
-#[serial_test::serial]
+// Parallel test with isolated context
 fn test_callback_context() {
+    let _ctx = TestContextGuard::new();
+
     anidb_init(1);
 
     let mut handle: *mut std::ffi::c_void = ptr::null_mut();
@@ -443,13 +454,15 @@ fn test_callback_context() {
         anidb_free_file_result(result);
     }
     assert_eq!(anidb_client_destroy(handle), AniDBResult::Success);
-    anidb_cleanup();
+    anidb_cleanup(std::ptr::null_mut());
 }
 
 /// Test thread safety of callbacks
 #[test]
-#[serial_test::serial]
+// Parallel test with isolated context
 fn test_callback_thread_safety() {
+    let _ctx = TestContextGuard::new();
+
     anidb_init(1);
 
     let mut handle: *mut std::ffi::c_void = ptr::null_mut();
@@ -523,5 +536,5 @@ fn test_callback_thread_safety() {
     // Disconnect and clean up
     anidb_event_disconnect(handle);
     assert_eq!(anidb_client_destroy(handle), AniDBResult::Success);
-    anidb_cleanup();
+    anidb_cleanup(std::ptr::null_mut());
 }

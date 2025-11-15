@@ -71,16 +71,22 @@ if (anidb_init(ANIDB_ABI_VERSION) != ANIDB_SUCCESS) {
 
 ### anidb_cleanup
 
-Clean up the AniDB client library. Should be called when the library is no longer needed.
+Clean up the AniDB client library or a specific client context. Pass `NULL` to
+release all global state (legacy behavior), or pass a client handle obtained
+from `anidb_client_create*` to tear down only that context.
 
 ```c
-void anidb_cleanup(void);
+void anidb_cleanup(anidb_client_handle_t handle);
 ```
 
-**Example:**
+**Examples:**
+
 ```c
-// At program exit
-anidb_cleanup();
+// Full shutdown at program exit
+anidb_cleanup(NULL);
+
+// Targeted teardown when a specific client is no longer needed
+anidb_cleanup(client_handle);
 ```
 
 ### anidb_get_version

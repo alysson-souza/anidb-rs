@@ -18,7 +18,7 @@ namespace AniDBClient.Native
         internal static extern AniDBResult anidb_init(uint abi_version);
 
         [DllImport(LibraryName, CallingConvention = CallingConvention.Cdecl)]
-        internal static extern void anidb_cleanup();
+        internal static extern void anidb_cleanup(IntPtr handle);
 
         [DllImport(LibraryName, CallingConvention = CallingConvention.Cdecl)]
         internal static extern IntPtr anidb_get_version();

@@ -5,7 +5,7 @@
 
 use crate::Progress;
 use crate::ffi::events::{create_file_event, create_memory_event, send_event};
-use crate::ffi::handles::CLIENTS;
+use crate::ffi::handles::resolve_client;
 use crate::ffi::helpers::*;
 use crate::ffi::types::*;
 use crate::ffi_catch_panic;
@@ -114,11 +114,6 @@ pub extern "C" fn anidb_process_file(
 
         let handle_id = handle as usize;
 
-        // Validate handle ID
-        if handle_id == 0 || handle_id > usize::MAX / 2 {
-            return AniDBResult::ErrorInvalidHandle;
-        }
-
         // Parse file path with safety
         let file_path_str = match c_str_to_string(file_path) {
             Ok(s) => s,
@@ -152,17 +147,10 @@ pub extern "C" fn anidb_process_file(
         }
 
         // Get client first to check for callbacks
-        let clients = match CLIENTS.read() {
-            Ok(c) => c,
-            Err(_) => return AniDBResult::ErrorBusy,
+        let client_arc = match resolve_client(handle_id) {
+            Ok(client) => client,
+            Err(err) => return err,
         };
-
-        let client_arc = match clients.get(&handle_id) {
-            Some(c) => c.clone(),
-            None => return AniDBResult::ErrorInvalidHandle,
-        };
-
-        drop(clients); // Release read lock
 
         // Get client callbacks for progress
         let client_callbacks = {
@@ -447,23 +435,10 @@ pub extern "C" fn anidb_client_get_last_error(
 
         let handle_id = handle as usize;
 
-        // Validate handle ID
-        if handle_id == 0 || handle_id > usize::MAX / 2 {
-            return AniDBResult::ErrorInvalidHandle;
-        }
-
-        let clients = match CLIENTS.read() {
-            Ok(c) => c,
-            Err(_) => return AniDBResult::ErrorBusy,
+        let client_arc = match resolve_client(handle_id) {
+            Ok(client) => client,
+            Err(err) => return err,
         };
-
-        let client_arc = match clients.get(&handle_id) {
-            Some(c) => c.clone(),
-            None => return AniDBResult::ErrorInvalidHandle,
-        };
-
-        // Release read lock before acquiring client lock
-        drop(clients);
 
         let client = match client_arc.lock() {
             Ok(c) => c,

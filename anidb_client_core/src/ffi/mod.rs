@@ -42,7 +42,7 @@ pub use types::*;
 // Re-export the macro at module level for internal use
 pub(crate) use crate::ffi_catch_panic;
 
-use std::ffi::c_char;
+use std::ffi::{c_char, c_void};
 use std::panic::{AssertUnwindSafe, catch_unwind};
 use std::sync::atomic::Ordering;
 
@@ -86,27 +86,21 @@ pub extern "C" fn anidb_init(abi_version: u32) -> AniDBResult {
     })
 }
 
-/// Cleanup the AniDB client library
+/// Cleanup the AniDB client library or a specific client context
 #[unsafe(no_mangle)]
-pub extern "C" fn anidb_cleanup() {
+pub extern "C" fn anidb_cleanup(handle: *mut c_void) {
     let _ = catch_unwind(AssertUnwindSafe(|| {
-        if handles::INITIALIZED
-            .compare_exchange(1, 0, Ordering::SeqCst, Ordering::SeqCst)
-            .is_ok()
-        {
-            // Clear all handles with proper error handling
-            if let Ok(mut clients) = handles::CLIENTS.write() {
-                clients.clear();
+        if handle.is_null() {
+            if handles::INITIALIZED
+                .compare_exchange(1, 0, Ordering::SeqCst, Ordering::SeqCst)
+                .is_ok()
+            {
+                handles::cleanup_all_contexts();
+                crate::buffer::reset_memory_state_for_tests();
             }
-            if let Ok(mut operations) = handles::OPERATIONS.write() {
-                operations.clear();
-            }
-            if let Ok(mut batches) = handles::BATCHES.write() {
-                batches.clear();
-            }
-
-            // Reset memory state on cleanup to ensure clean state
-            crate::buffer::reset_memory_state_for_tests();
+        } else {
+            let handle_id = handle as usize;
+            let _ = handles::cleanup_context_for_handle(handle_id);
         }
     }));
 }

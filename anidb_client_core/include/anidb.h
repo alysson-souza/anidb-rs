@@ -503,12 +503,12 @@ typedef struct {
 anidb_result_t anidb_init(uint32_t abi_version);
 
 /**
- * @brief Cleanup the AniDB client library
+ * @brief Cleanup the AniDB client library or a specific client context
  * 
- * This function should be called when the library is no longer needed.
- * It will clean up all global state and release resources.
+ * Pass NULL to release all global state (legacy behavior). Pass a valid client
+ * handle to tear down only that client's context without affecting others.
  */
-void anidb_cleanup(void);
+void anidb_cleanup(anidb_client_handle_t handle);
 
 /**
  * @brief Get library version string

@@ -26,14 +26,17 @@ use anidb_client_core::ffi::{
     anidb_init,
     anidb_process_file,
 };
+use anidb_test_utils::TestContextGuard;
 use std::ffi::{CStr, CString};
 use std::ptr;
 use tempfile::TempDir;
 
 /// Test library initialization and cleanup
 #[test]
-#[serial_test::serial]
+// Parallel test with isolated context
 fn test_library_lifecycle() {
+    let _ctx = TestContextGuard::new();
+
     // Initialize library with correct ABI version
     let result = anidb_init(1);
     assert_eq!(result, AniDBResult::Success);
@@ -47,13 +50,15 @@ fn test_library_lifecycle() {
     assert_eq!(result, AniDBResult::ErrorVersionMismatch);
 
     // Cleanup
-    anidb_cleanup();
+    anidb_cleanup(std::ptr::null_mut());
 }
 
 /// Test version functions
 #[test]
-#[serial_test::serial]
+// Parallel test with isolated context
 fn test_version_functions() {
+    let _ctx = TestContextGuard::new();
+
     // Get version string
     let version_ptr = anidb_get_version();
     assert!(!version_ptr.is_null());
@@ -70,8 +75,10 @@ fn test_version_functions() {
 
 /// Test creating and destroying an AniDB client handle
 #[test]
-#[serial_test::serial]
+// Parallel test with isolated context
 fn test_client_handle_lifecycle() {
+    let _ctx = TestContextGuard::new();
+
     // Initialize library
     let _ = anidb_init(1);
 
@@ -90,13 +97,15 @@ fn test_client_handle_lifecycle() {
     assert_eq!(result, AniDBResult::ErrorInvalidHandle);
 
     // Cleanup
-    anidb_cleanup();
+    anidb_cleanup(std::ptr::null_mut());
 }
 
 /// Test creating client with configuration
 #[test]
-#[serial_test::serial]
+// Parallel test with isolated context
 fn test_client_creation_with_config() {
+    let _ctx = TestContextGuard::new();
+
     // Initialize library
     let _ = anidb_init(1);
 
@@ -120,13 +129,15 @@ fn test_client_creation_with_config() {
     let result = anidb_client_destroy(handle);
     assert_eq!(result, AniDBResult::Success);
 
-    anidb_cleanup();
+    anidb_cleanup(std::ptr::null_mut());
 }
 
 /// Test null pointer handling
 #[test]
-#[serial_test::serial]
+// Parallel test with isolated context
 fn test_null_pointer_handling() {
+    let _ctx = TestContextGuard::new();
+
     // Initialize library
     let _ = anidb_init(1);
 
@@ -147,13 +158,15 @@ fn test_null_pointer_handling() {
 
     // Clean up
     let _ = anidb_client_destroy(handle);
-    anidb_cleanup();
+    anidb_cleanup(std::ptr::null_mut());
 }
 
 /// Test file processing via FFI
 #[test]
-#[serial_test::serial]
+// Parallel test with isolated context
 fn test_file_processing_ffi() {
+    let _ctx = TestContextGuard::new();
+
     // Initialize library
     let _ = anidb_init(1);
 
@@ -196,13 +209,15 @@ fn test_file_processing_ffi() {
 
     // Clean up
     let _ = anidb_client_destroy(handle);
-    anidb_cleanup();
+    anidb_cleanup(std::ptr::null_mut());
 }
 
 /// Test error handling and error messages
 #[test]
-#[serial_test::serial]
+// Parallel test with isolated context
 fn test_error_handling() {
+    let _ctx = TestContextGuard::new();
+
     // Initialize library
     let _ = anidb_init(1);
 
@@ -237,13 +252,15 @@ fn test_error_handling() {
 
     // Clean up
     let _ = anidb_client_destroy(handle);
-    anidb_cleanup();
+    anidb_cleanup(std::ptr::null_mut());
 }
 
 /// Test utility functions
 #[test]
-#[serial_test::serial]
+// Parallel test with isolated context
 fn test_utility_functions() {
+    let _ctx = TestContextGuard::new();
+
     // Test error string function
     let error_str = anidb_error_string(AniDBResult::ErrorFileNotFound);
     assert!(!error_str.is_null());
@@ -270,8 +287,10 @@ fn test_utility_functions() {
 
 /// Test progress callback functionality
 #[test]
-#[serial_test::serial]
+// Parallel test with isolated context
 fn test_progress_callback() {
+    let _ctx = TestContextGuard::new();
+
     use std::sync::{Arc, Mutex};
 
     // Initialize library
@@ -340,13 +359,15 @@ fn test_progress_callback() {
 
     // Clean up
     let _ = anidb_client_destroy(handle);
-    anidb_cleanup();
+    anidb_cleanup(std::ptr::null_mut());
 }
 
 /// Test multiple hash algorithms
 #[test]
-#[serial_test::serial]
+// Parallel test with isolated context
 fn test_multiple_hash_algorithms() {
+    let _ctx = TestContextGuard::new();
+
     // Initialize library
     let _ = anidb_init(1);
 
@@ -398,13 +419,15 @@ fn test_multiple_hash_algorithms() {
 
     // Clean up
     let _ = anidb_client_destroy(handle);
-    anidb_cleanup();
+    anidb_cleanup(std::ptr::null_mut());
 }
 
 /// Test free functions for memory management
 #[test]
-#[serial_test::serial]
+// Parallel test with isolated context
 fn test_memory_management() {
+    let _ctx = TestContextGuard::new();
+
     // Test freeing a null string (should not crash)
     anidb_free_string(ptr::null_mut());
 

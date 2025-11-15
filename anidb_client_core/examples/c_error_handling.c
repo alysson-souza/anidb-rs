@@ -306,7 +306,7 @@ int main(int argc, char* argv[]) {
         log_message(&ctx, LOG_FATAL, 
                    "Failed to create client: %s",
                    anidb_error_string(result));
-        anidb_cleanup();
+        anidb_cleanup(NULL);
         if (ctx.log_file) fclose(ctx.log_file);
         return 1;
     }
@@ -365,7 +365,7 @@ int main(int argc, char* argv[]) {
     }
     
     anidb_client_destroy(client);
-    anidb_cleanup();
+    anidb_cleanup(NULL);
     
     if (ctx.log_file) {
         log_message(&ctx, LOG_INFO, "Log file closed.");

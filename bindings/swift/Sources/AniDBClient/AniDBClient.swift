@@ -361,7 +361,7 @@ public final class AniDBClient: @unchecked Sendable {
                 
                 // Register cleanup on app termination
                 atexit {
-                    anidb_cleanup()
+                    anidb_cleanup(nil)
                 }
             }
         }

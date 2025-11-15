@@ -584,7 +584,7 @@ int main() {
     // Minimal test...
     
     anidb_client_destroy(client);
-    anidb_cleanup();
+    anidb_cleanup(NULL);
     return 0;
 }
 ```

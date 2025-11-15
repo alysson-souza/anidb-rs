@@ -3,7 +3,10 @@
 //! Verifies that all hash algorithms maintain constant memory usage
 //! regardless of file size, and properly implement streaming.
 
+mod fixtures;
+
 use anidb_client_core::hashing::{HashAlgorithm, HashCalculator};
+use fixtures::SHARED_FIXTURES;
 use std::time::Instant;
 use tempfile::TempDir;
 use tokio::fs::File;
@@ -12,30 +15,16 @@ use tokio::io::AsyncWriteExt;
 /// Test that SHA1 maintains constant memory usage for large files
 #[tokio::test]
 async fn test_sha1_memory_usage() {
-    let temp_dir = TempDir::new().unwrap();
-    let test_file = temp_dir.path().join("large_file.bin");
-
-    // Create a 10MB file
+    // Use shared 10MB fixture instead of creating per-test
+    let test_file = &SHARED_FIXTURES.file_10mb;
     let file_size = 10 * 1024 * 1024;
-    let mut file = File::create(&test_file).await.unwrap();
-
-    // Write in chunks to avoid loading all data in memory
-    let chunk_size = 64 * 1024;
-    let chunk = vec![0xABu8; chunk_size];
-    let chunks = file_size / chunk_size;
-
-    for _ in 0..chunks {
-        file.write_all(&chunk).await.unwrap();
-    }
-    file.flush().await.unwrap();
-    drop(file);
 
     let calculator = HashCalculator::new();
     let start_time = Instant::now();
 
     // Calculate hash - should use streaming and constant memory
     let result = calculator
-        .calculate_file(&test_file, HashAlgorithm::SHA1)
+        .calculate_file(test_file, HashAlgorithm::SHA1)
         .await
         .unwrap();
 
@@ -57,30 +46,16 @@ async fn test_sha1_memory_usage() {
 /// Test that TTH maintains constant memory usage for large files
 #[tokio::test]
 async fn test_tth_memory_usage() {
-    let temp_dir = TempDir::new().unwrap();
-    let test_file = temp_dir.path().join("large_file.bin");
-
-    // Create a 10MB file (multiple TTH leaves)
+    // Use shared 10MB fixture with CD pattern
+    let test_file = &SHARED_FIXTURES.file_10mb_pattern_cd;
     let file_size = 10 * 1024 * 1024;
-    let mut file = File::create(&test_file).await.unwrap();
-
-    // Write in chunks
-    let chunk_size = 64 * 1024;
-    let chunk = vec![0xCDu8; chunk_size];
-    let chunks = file_size / chunk_size;
-
-    for _ in 0..chunks {
-        file.write_all(&chunk).await.unwrap();
-    }
-    file.flush().await.unwrap();
-    drop(file);
 
     let calculator = HashCalculator::new();
     let start_time = Instant::now();
 
     // Calculate hash - should use streaming and constant memory
     let result = calculator
-        .calculate_file(&test_file, HashAlgorithm::TTH)
+        .calculate_file(test_file, HashAlgorithm::TTH)
         .await
         .unwrap();
 

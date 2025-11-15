@@ -8,6 +8,7 @@
 //! - Resource cleanup on error paths
 
 use anidb_client_core::ffi::*;
+use anidb_test_utils::TestContextGuard;
 use std::ffi::{CStr, CString};
 use std::os::raw::c_char;
 use std::ptr;
@@ -29,8 +30,10 @@ unsafe fn from_c_string(s: *const c_char) -> String {
 
 /// Test basic string allocation and deallocation
 #[test]
-#[serial_test::serial]
+// Parallel test with isolated context
 fn test_string_allocation_deallocation() {
+    let _ctx = TestContextGuard::new();
+
     // Initialize library
     assert_eq!(anidb_init(1), AniDBResult::Success);
 
@@ -48,13 +51,15 @@ fn test_string_allocation_deallocation() {
         anidb_free_string(c_ptr);
     }
 
-    anidb_cleanup();
+    anidb_cleanup(std::ptr::null_mut());
 }
 
 /// Test UTF-8 string handling
 #[test]
-#[serial_test::serial]
+// Parallel test with isolated context
 fn test_utf8_string_handling() {
+    let _ctx = TestContextGuard::new();
+
     assert_eq!(anidb_init(1), AniDBResult::Success);
 
     // Test various UTF-8 strings
@@ -79,13 +84,15 @@ fn test_utf8_string_handling() {
         anidb_free_string(c_ptr);
     }
 
-    anidb_cleanup();
+    anidb_cleanup(std::ptr::null_mut());
 }
 
 /// Test file result memory management
 #[test]
-#[serial_test::serial]
+// Parallel test with isolated context
 fn test_file_result_memory_management() {
+    let _ctx = TestContextGuard::new();
+
     assert_eq!(anidb_init(1), AniDBResult::Success);
 
     let mut handle: *mut std::ffi::c_void = ptr::null_mut();
@@ -135,13 +142,15 @@ fn test_file_result_memory_management() {
     }
 
     assert_eq!(anidb_client_destroy(handle), AniDBResult::Success);
-    anidb_cleanup();
+    anidb_cleanup(std::ptr::null_mut());
 }
 
 /// Test batch result memory management
 #[test]
-#[serial_test::serial]
+// Parallel test with isolated context
 fn test_batch_result_memory_management() {
+    let _ctx = TestContextGuard::new();
+
     assert_eq!(anidb_init(1), AniDBResult::Success);
 
     // Simulate a batch result
@@ -217,13 +226,15 @@ fn test_batch_result_memory_management() {
     // Free the batch result
     anidb_free_batch_result(Box::into_raw(batch_result));
 
-    anidb_cleanup();
+    anidb_cleanup(std::ptr::null_mut());
 }
 
 /// Test memory cleanup on error paths
 #[test]
-#[serial_test::serial]
+// Parallel test with isolated context
 fn test_error_path_cleanup() {
+    let _ctx = TestContextGuard::new();
+
     assert_eq!(anidb_init(1), AniDBResult::Success);
 
     // Test invalid handle
@@ -254,13 +265,15 @@ fn test_error_path_cleanup() {
     assert_ne!(status, AniDBResult::Success);
 
     assert_eq!(anidb_client_destroy(handle), AniDBResult::Success);
-    anidb_cleanup();
+    anidb_cleanup(std::ptr::null_mut());
 }
 
 /// Test concurrent string operations
 #[test]
-#[serial_test::serial]
+// Parallel test with isolated context
 fn test_concurrent_string_operations() {
+    let _ctx = TestContextGuard::new();
+
     use std::thread;
 
     assert_eq!(anidb_init(1), AniDBResult::Success);
@@ -287,13 +300,15 @@ fn test_concurrent_string_operations() {
         handle.join().unwrap();
     }
 
-    anidb_cleanup();
+    anidb_cleanup(std::ptr::null_mut());
 }
 
 /// Test memory tracking across FFI
 #[test]
-#[serial_test::serial]
+// Parallel test with isolated context
 fn test_memory_tracking() {
+    let _ctx = TestContextGuard::new();
+
     use anidb_client_core::buffer::memory_used;
 
     assert_eq!(anidb_init(1), AniDBResult::Success);
@@ -313,7 +328,7 @@ fn test_memory_tracking() {
 
     // Clean up
     assert_eq!(anidb_client_destroy(handle), AniDBResult::Success);
-    anidb_cleanup();
+    anidb_cleanup(std::ptr::null_mut());
 
     // Note: We can't guarantee memory returns to exactly initial value
     // due to internal caching and allocations
@@ -321,8 +336,10 @@ fn test_memory_tracking() {
 
 /// Test buffer overflow prevention
 #[test]
-#[serial_test::serial]
+// Parallel test with isolated context
 fn test_buffer_overflow_prevention() {
+    let _ctx = TestContextGuard::new();
+
     assert_eq!(anidb_init(1), AniDBResult::Success);
 
     let mut handle: *mut std::ffi::c_void = ptr::null_mut();
@@ -340,13 +357,15 @@ fn test_buffer_overflow_prevention() {
     assert_eq!(buffer[9], 0);
 
     assert_eq!(anidb_client_destroy(handle), AniDBResult::Success);
-    anidb_cleanup();
+    anidb_cleanup(std::ptr::null_mut());
 }
 
 /// Test null pointer validation
 #[test]
-#[serial_test::serial]
+// Parallel test with isolated context
 fn test_null_pointer_validation() {
+    let _ctx = TestContextGuard::new();
+
     assert_eq!(anidb_init(1), AniDBResult::Success);
 
     // Test various functions with null pointers
@@ -365,13 +384,15 @@ fn test_null_pointer_validation() {
         AniDBResult::ErrorInvalidParameter
     );
 
-    anidb_cleanup();
+    anidb_cleanup(std::ptr::null_mut());
 }
 
 /// Test callback memory management
 #[test]
-#[serial_test::serial]
+// Parallel test with isolated context
 fn test_callback_memory_management() {
+    let _ctx = TestContextGuard::new();
+
     assert_eq!(anidb_init(1), AniDBResult::Success);
 
     let mut handle: *mut std::ffi::c_void = ptr::null_mut();
@@ -407,13 +428,15 @@ fn test_callback_memory_management() {
     );
 
     assert_eq!(anidb_client_destroy(handle), AniDBResult::Success);
-    anidb_cleanup();
+    anidb_cleanup(std::ptr::null_mut());
 }
 
 /// Test event system memory management
 #[test]
-#[serial_test::serial]
+// Parallel test with isolated context
 fn test_event_system_memory() {
+    let _ctx = TestContextGuard::new();
+
     assert_eq!(anidb_init(1), AniDBResult::Success);
 
     let mut handle: *mut std::ffi::c_void = ptr::null_mut();
@@ -447,13 +470,15 @@ fn test_event_system_memory() {
     assert_eq!(anidb_event_disconnect(handle), AniDBResult::Success);
 
     assert_eq!(anidb_client_destroy(handle), AniDBResult::Success);
-    anidb_cleanup();
+    anidb_cleanup(std::ptr::null_mut());
 }
 
 /// Test memory stress with multiple operations
 #[test]
-#[serial_test::serial]
+// Parallel test with isolated context
 fn test_memory_stress() {
+    let _ctx = TestContextGuard::new();
+
     assert_eq!(anidb_init(1), AniDBResult::Success);
 
     // Create multiple clients
@@ -498,5 +523,5 @@ fn test_memory_stress() {
         assert_eq!(anidb_client_destroy(handle), AniDBResult::Success);
     }
 
-    anidb_cleanup();
+    anidb_cleanup(std::ptr::null_mut());
 }

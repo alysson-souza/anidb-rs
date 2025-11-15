@@ -3,14 +3,13 @@
 //! This module provides helper functions for FFI operations including
 //! panic catching, validation, string conversion, and callback invocation.
 
-use crate::ffi::handles::{CallbackRegistration, NEXT_HANDLE_ID};
+use crate::ffi::handles::CallbackRegistration;
 use crate::ffi::types::{AniDBCallbackType, AniDBHashAlgorithm, AniDBResult};
 use crate::ffi_memory::ffi_allocate_string;
 use crate::{Error, HashAlgorithm};
 use std::collections::HashMap;
 use std::ffi::{CStr, c_char};
 use std::panic::{AssertUnwindSafe, catch_unwind};
-use std::sync::atomic::Ordering;
 use std::sync::{Arc, Mutex};
 use std::time::{SystemTime, UNIX_EPOCH};
 
@@ -119,11 +118,6 @@ pub(crate) fn convert_hash_algorithm_to_ffi(algo: &HashAlgorithm) -> AniDBHashAl
         HashAlgorithm::SHA1 => AniDBHashAlgorithm::SHA1,
         HashAlgorithm::TTH => AniDBHashAlgorithm::TTH,
     }
-}
-
-/// Generate a new handle ID
-pub(crate) fn generate_handle_id() -> usize {
-    NEXT_HANDLE_ID.fetch_add(1, Ordering::SeqCst)
 }
 
 /// Get current timestamp in milliseconds since epoch

@@ -1,9 +1,10 @@
 //! Handle registry and lifecycle management for FFI
 //!
-//! This module manages the lifecycle of FFI handles, including client,
-//! operation, and batch states with their associated registries.
+//! This module manages context-scoped registries for all FFI handles, ensuring
+//! each client (and derived operations) operate in isolation without global
+//! cross-talk.
 
-use crate::ffi::helpers::{c_str_to_string, generate_handle_id, validate_mut_ptr, validate_ptr};
+use crate::ffi::helpers::{c_str_to_string, validate_mut_ptr, validate_ptr};
 use crate::ffi::types::{
     AniDBCallbackType, AniDBConfig, AniDBEvent, AniDBEventCallback, AniDBResult, AniDBStatus,
 };
@@ -11,10 +12,21 @@ use crate::ffi_catch_panic;
 use crate::{ClientConfig, Error, FileProcessor};
 use std::collections::{HashMap, VecDeque};
 use std::ffi::{CString, c_void};
-use std::sync::atomic::{AtomicU64, AtomicUsize};
+use std::sync::atomic::{AtomicU32, AtomicU64, AtomicUsize, Ordering};
 use std::sync::{Arc, Mutex, RwLock};
 use tokio::runtime::Runtime;
 use tokio::sync::mpsc;
+
+type ContextId = u32;
+type HandleIndex = usize;
+
+const CONTEXT_ID_BITS: u32 = 16;
+const HANDLE_INDEX_BITS: u32 = usize::BITS - CONTEXT_ID_BITS;
+const HANDLE_INDEX_MASK: usize = (1usize << HANDLE_INDEX_BITS) - 1;
+const CONTEXT_ID_MASK: usize = (1usize << CONTEXT_ID_BITS) - 1;
+const MAX_CONTEXT_ID: ContextId = (1 << CONTEXT_ID_BITS) - 1;
+
+const _: [(); 1] = [(); (usize::BITS > CONTEXT_ID_BITS) as usize];
 
 /// Callback registration information
 pub(crate) struct CallbackRegistration {
@@ -53,6 +65,10 @@ pub(crate) struct ClientState {
     pub last_error: Option<String>,
     #[allow(dead_code)]
     pub reference_count: AtomicUsize,
+    #[allow(dead_code)]
+    pub context_id: ContextId,
+    #[allow(dead_code)]
+    pub handle_index: HandleIndex,
 
     // Callback management
     pub callbacks: Arc<Mutex<HashMap<u64, CallbackRegistration>>>,
@@ -84,11 +100,205 @@ pub(crate) struct BatchState {
 
 // Handle registries
 lazy_static::lazy_static! {
-    pub(crate) static ref CLIENTS: RwLock<HashMap<usize, Arc<Mutex<ClientState>>>> = RwLock::new(HashMap::new());
-    pub(crate) static ref OPERATIONS: RwLock<HashMap<usize, Arc<Mutex<OperationState>>>> = RwLock::new(HashMap::new());
-    pub(crate) static ref BATCHES: RwLock<HashMap<usize, Arc<Mutex<BatchState>>>> = RwLock::new(HashMap::new());
-    pub(crate) static ref NEXT_HANDLE_ID: AtomicUsize = AtomicUsize::new(1);
+    static ref CONTEXTS: RwLock<HashMap<ContextId, Arc<ContextState>>> = RwLock::new(HashMap::new());
+    static ref NEXT_CONTEXT_ID: AtomicU32 = AtomicU32::new(1);
     pub(crate) static ref INITIALIZED: AtomicUsize = AtomicUsize::new(0);
+}
+
+struct ContextState {
+    id: ContextId,
+    clients: RwLock<HashMap<HandleIndex, Arc<Mutex<ClientState>>>>,
+    operations: RwLock<HashMap<HandleIndex, Arc<Mutex<OperationState>>>>,
+    batches: RwLock<HashMap<HandleIndex, Arc<Mutex<BatchState>>>>,
+    next_handle_index: AtomicUsize,
+}
+
+impl ContextState {
+    fn new(id: ContextId) -> Self {
+        Self {
+            id,
+            clients: RwLock::new(HashMap::new()),
+            operations: RwLock::new(HashMap::new()),
+            batches: RwLock::new(HashMap::new()),
+            next_handle_index: AtomicUsize::new(1),
+        }
+    }
+
+    fn allocate_handle(&self) -> Result<HandleIndex, AniDBResult> {
+        let handle_index = self.next_handle_index.fetch_add(1, Ordering::SeqCst);
+        if handle_index == 0 || handle_index > HANDLE_INDEX_MASK {
+            return Err(AniDBResult::ErrorBusy);
+        }
+        Ok(handle_index)
+    }
+
+    fn is_empty(&self) -> bool {
+        let clients_empty = self
+            .clients
+            .read()
+            .map(|clients| clients.is_empty())
+            .unwrap_or(false);
+        let operations_empty = self
+            .operations
+            .read()
+            .map(|operations| operations.is_empty())
+            .unwrap_or(false);
+        let batches_empty = self
+            .batches
+            .read()
+            .map(|batches| batches.is_empty())
+            .unwrap_or(false);
+
+        clients_empty && operations_empty && batches_empty
+    }
+
+    fn clear(&self) {
+        if let Ok(mut clients) = self.clients.write() {
+            clients.clear();
+        }
+        if let Ok(mut operations) = self.operations.write() {
+            operations.clear();
+        }
+        if let Ok(mut batches) = self.batches.write() {
+            batches.clear();
+        }
+    }
+}
+
+fn allocate_context_id() -> Result<ContextId, AniDBResult> {
+    let id = NEXT_CONTEXT_ID.fetch_add(1, Ordering::SeqCst);
+    if id == 0 || id > MAX_CONTEXT_ID {
+        return Err(AniDBResult::ErrorBusy);
+    }
+    Ok(id)
+}
+
+fn register_context(context: Arc<ContextState>) -> Result<(), AniDBResult> {
+    let mut contexts = CONTEXTS.write().map_err(|_| AniDBResult::ErrorBusy)?;
+    contexts.insert(context.id, Arc::clone(&context));
+    Ok(())
+}
+
+fn get_context(context_id: ContextId) -> Result<Arc<ContextState>, AniDBResult> {
+    let contexts = CONTEXTS.read().map_err(|_| AniDBResult::ErrorBusy)?;
+    contexts
+        .get(&context_id)
+        .cloned()
+        .ok_or(AniDBResult::ErrorInvalidHandle)
+}
+
+fn remove_context_if_unused(context_id: ContextId, context: &Arc<ContextState>) {
+    if !context.is_empty() {
+        return;
+    }
+
+    if let Ok(mut contexts) = CONTEXTS.write()
+        && let Some(current) = contexts.get(&context_id)
+        && Arc::ptr_eq(current, context)
+    {
+        contexts.remove(&context_id);
+    }
+}
+
+fn encode_handle(context_id: ContextId, handle_index: HandleIndex) -> Result<usize, AniDBResult> {
+    if context_id == 0 || context_id > MAX_CONTEXT_ID {
+        return Err(AniDBResult::ErrorInvalidHandle);
+    }
+
+    if handle_index == 0 || handle_index > HANDLE_INDEX_MASK {
+        return Err(AniDBResult::ErrorInvalidHandle);
+    }
+
+    Ok(((handle_index & HANDLE_INDEX_MASK) << CONTEXT_ID_BITS) | context_id as usize)
+}
+
+pub(crate) fn decode_handle_parts(
+    handle_id: usize,
+) -> Result<(ContextId, HandleIndex), AniDBResult> {
+    if handle_id == 0 {
+        return Err(AniDBResult::ErrorInvalidHandle);
+    }
+
+    let context_id = (handle_id & CONTEXT_ID_MASK) as ContextId;
+    let handle_index = handle_id >> CONTEXT_ID_BITS;
+
+    if context_id == 0 || handle_index == 0 {
+        return Err(AniDBResult::ErrorInvalidHandle);
+    }
+
+    Ok((context_id, handle_index))
+}
+
+fn insert_client(
+    context: &Arc<ContextState>,
+    handle_index: HandleIndex,
+    client_arc: Arc<Mutex<ClientState>>,
+) -> Result<(), AniDBResult> {
+    let mut clients = context
+        .clients
+        .write()
+        .map_err(|_| AniDBResult::ErrorBusy)?;
+    clients.insert(handle_index, client_arc);
+    Ok(())
+}
+
+fn remove_client(
+    context: &Arc<ContextState>,
+    handle_index: HandleIndex,
+) -> Result<bool, AniDBResult> {
+    let mut clients = context
+        .clients
+        .write()
+        .map_err(|_| AniDBResult::ErrorBusy)?;
+    Ok(clients.remove(&handle_index).is_some())
+}
+
+fn create_context() -> Result<Arc<ContextState>, AniDBResult> {
+    let context_id = allocate_context_id()?;
+    let context = Arc::new(ContextState::new(context_id));
+    register_context(Arc::clone(&context))?;
+    Ok(context)
+}
+
+fn cleanup_context_by_id(context_id: ContextId) {
+    let context = match CONTEXTS.write() {
+        Ok(mut contexts) => contexts.remove(&context_id),
+        Err(_) => None,
+    };
+
+    if let Some(context) = context {
+        context.clear();
+    }
+}
+
+pub(crate) fn cleanup_context_for_handle(handle_id: usize) -> AniDBResult {
+    match decode_handle_parts(handle_id) {
+        Ok((context_id, _)) => {
+            cleanup_context_by_id(context_id);
+            AniDBResult::Success
+        }
+        Err(err) => err,
+    }
+}
+
+pub(crate) fn cleanup_all_contexts() {
+    if let Ok(mut contexts) = CONTEXTS.write() {
+        let drained: Vec<_> = contexts.drain().map(|(_, ctx)| ctx).collect();
+        drop(contexts);
+        for context in drained {
+            context.clear();
+        }
+    }
+}
+
+pub(crate) fn resolve_client(handle_id: usize) -> Result<Arc<Mutex<ClientState>>, AniDBResult> {
+    let (context_id, handle_index) = decode_handle_parts(handle_id)?;
+    let context = get_context(context_id)?;
+    let clients = context.clients.read().map_err(|_| AniDBResult::ErrorBusy)?;
+    clients
+        .get(&handle_index)
+        .cloned()
+        .ok_or(AniDBResult::ErrorInvalidHandle)
 }
 
 /// Create a new AniDB client instance with default configuration
@@ -195,12 +405,27 @@ pub(crate) fn create_client_with_config(
     // Create file processor
     let file_processor = Arc::new(FileProcessor::new(config.clone()));
 
+    let context = match create_context() {
+        Ok(ctx) => ctx,
+        Err(err) => return err,
+    };
+
+    let handle_index = match context.allocate_handle() {
+        Ok(idx) => idx,
+        Err(err) => {
+            cleanup_context_by_id(context.id);
+            return err;
+        }
+    };
+
     let state = ClientState {
         config,
         file_processor,
         runtime,
         last_error: None,
         reference_count: AtomicUsize::new(1),
+        context_id: context.id,
+        handle_index,
         callbacks: Arc::new(Mutex::new(HashMap::new())),
         next_callback_id: Arc::new(AtomicU64::new(1)),
         event_callback: Arc::new(Mutex::new(None)),
@@ -209,11 +434,20 @@ pub(crate) fn create_client_with_config(
         event_sender: Arc::new(Mutex::new(None)),
     };
 
-    let handle_id = generate_handle_id();
     let client_arc = Arc::new(Mutex::new(state));
 
-    // Store in registry
-    CLIENTS.write().unwrap().insert(handle_id, client_arc);
+    if let Err(err) = insert_client(&context, handle_index, Arc::clone(&client_arc)) {
+        cleanup_context_by_id(context.id);
+        return err;
+    }
+
+    let handle_id = match encode_handle(context.id, handle_index) {
+        Ok(id) => id,
+        Err(err) => {
+            cleanup_context_by_id(context.id);
+            return err;
+        }
+    };
 
     unsafe {
         *handle = handle_id as *mut c_void;
@@ -231,19 +465,23 @@ pub extern "C" fn anidb_client_destroy(handle: *mut c_void) -> AniDBResult {
         }
 
         let handle_id = handle as usize;
+        let (context_id, handle_index) = match decode_handle_parts(handle_id) {
+            Ok(parts) => parts,
+            Err(err) => return err,
+        };
 
-        // Validate handle ID is reasonable
-        if handle_id == 0 || handle_id > usize::MAX / 2 {
-            return AniDBResult::ErrorInvalidHandle;
-        }
+        let context = match get_context(context_id) {
+            Ok(ctx) => ctx,
+            Err(err) => return err,
+        };
 
-        // Remove from registry with proper error handling
-        match CLIENTS.write() {
-            Ok(mut clients) => match clients.remove(&handle_id) {
-                Some(_) => AniDBResult::Success,
-                None => AniDBResult::ErrorInvalidHandle,
-            },
-            Err(_) => AniDBResult::ErrorBusy,
+        match remove_client(&context, handle_index) {
+            Ok(true) => {
+                remove_context_if_unused(context_id, &context);
+                AniDBResult::Success
+            }
+            Ok(false) => AniDBResult::ErrorInvalidHandle,
+            Err(err) => err,
         }
     })
 }

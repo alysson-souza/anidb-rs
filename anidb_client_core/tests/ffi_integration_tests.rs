@@ -15,6 +15,7 @@ use anidb_client_core::ffi::{
     anidb_get_memory_stats, anidb_init, anidb_memory_gc, anidb_process_file,
     anidb_register_callback, anidb_unregister_callback,
 };
+use anidb_test_utils::TestContextGuard;
 use std::ffi::CString;
 use std::fs;
 use std::path::PathBuf;
@@ -97,8 +98,10 @@ impl TestFileManager {
 
 /// Test multi-threaded access with concurrent client operations
 #[test]
-#[serial_test::serial]
+// Parallel test with isolated context
 fn test_ffi_multi_threaded_access() {
+    let _ctx = TestContextGuard::new();
+
     // Initialize library
     assert_eq!(anidb_init(1), AniDBResult::Success);
 
@@ -201,13 +204,15 @@ fn test_ffi_multi_threaded_access() {
         "No errors expected"
     );
 
-    anidb_cleanup();
+    anidb_cleanup(std::ptr::null_mut());
 }
 
 /// Test thread safety with concurrent operations on same client
 #[test]
-#[serial_test::serial]
+// Parallel test with isolated context
 fn test_ffi_thread_safety_shared_client() {
+    let _ctx = TestContextGuard::new();
+
     assert_eq!(anidb_init(1), AniDBResult::Success);
 
     let file_manager = TestFileManager::new();
@@ -275,14 +280,16 @@ fn test_ffi_thread_safety_shared_client() {
     );
 
     anidb_client_destroy(client_handle);
-    anidb_cleanup();
+    anidb_cleanup(std::ptr::null_mut());
 }
 
 /// Test large file processing (>1GB)
 #[test]
-#[serial_test::serial]
+// Parallel test with isolated context
 #[ignore] // Ignored by default due to disk space requirements
 fn test_ffi_large_file_processing() {
+    let _ctx = TestContextGuard::new();
+
     assert_eq!(anidb_init(1), AniDBResult::Success);
 
     let file_manager = TestFileManager::new();
@@ -405,13 +412,15 @@ fn test_ffi_large_file_processing() {
     );
 
     anidb_client_destroy(client_handle);
-    anidb_cleanup();
+    anidb_cleanup(std::ptr::null_mut());
 }
 
 /// Test various error conditions
 #[test]
-#[serial_test::serial]
+// Parallel test with isolated context
 fn test_ffi_error_conditions() {
+    let _ctx = TestContextGuard::new();
+
     assert_eq!(anidb_init(1), AniDBResult::Success);
 
     let file_manager = TestFileManager::new();
@@ -514,13 +523,15 @@ fn test_ffi_error_conditions() {
     }
 
     anidb_client_destroy(client_handle);
-    anidb_cleanup();
+    anidb_cleanup(std::ptr::null_mut());
 }
 
 /// Test memory stress and leak detection
 #[test]
-#[serial_test::serial]
+// Parallel test with isolated context
 fn test_ffi_memory_stress() {
+    let _ctx = TestContextGuard::new();
+
     assert_eq!(anidb_init(1), AniDBResult::Success);
 
     let file_manager = TestFileManager::new();
@@ -623,13 +634,15 @@ fn test_ffi_memory_stress() {
         assert_eq!(leak_count, 0, "Memory leaks detected");
     }
 
-    anidb_cleanup();
+    anidb_cleanup(std::ptr::null_mut());
 }
 
 /// Test platform-specific behavior
 #[test]
-#[serial_test::serial]
+// Parallel test with isolated context
 fn test_ffi_platform_specific() {
+    let _ctx = TestContextGuard::new();
+
     assert_eq!(anidb_init(1), AniDBResult::Success);
 
     let file_manager = TestFileManager::new();
@@ -725,13 +738,15 @@ fn test_ffi_platform_specific() {
     }
 
     anidb_client_destroy(client_handle);
-    anidb_cleanup();
+    anidb_cleanup(std::ptr::null_mut());
 }
 
 /// Test event system with callbacks
 #[test]
-#[serial_test::serial]
+// Parallel test with isolated context
 fn test_ffi_event_system() {
+    let _ctx = TestContextGuard::new();
+
     assert_eq!(anidb_init(1), AniDBResult::Success);
 
     let file_manager = TestFileManager::new();
@@ -800,13 +815,15 @@ fn test_ffi_event_system() {
     assert_eq!(anidb_event_disconnect(client_handle), AniDBResult::Success);
 
     anidb_client_destroy(client_handle);
-    anidb_cleanup();
+    anidb_cleanup(std::ptr::null_mut());
 }
 
 /// Test callback registration and management
 #[test]
-#[serial_test::serial]
+// Parallel test with isolated context
 fn test_ffi_callback_management() {
+    let _ctx = TestContextGuard::new();
+
     assert_eq!(anidb_init(1), AniDBResult::Success);
 
     // Create client
@@ -926,13 +943,15 @@ fn test_ffi_callback_management() {
     );
 
     anidb_client_destroy(client_handle);
-    anidb_cleanup();
+    anidb_cleanup(std::ptr::null_mut());
 }
 
 /// Test race condition detection with aggressive concurrent access
 #[test]
-#[serial_test::serial]
+// Parallel test with isolated context
 fn test_ffi_race_condition_detection() {
+    let _ctx = TestContextGuard::new();
+
     assert_eq!(anidb_init(1), AniDBResult::Success);
 
     let file_manager = TestFileManager::new();
@@ -1008,13 +1027,15 @@ fn test_ffi_race_condition_detection() {
     );
 
     anidb_client_destroy(client_handle);
-    anidb_cleanup();
+    anidb_cleanup(std::ptr::null_mut());
 }
 
 /// Test buffer pool effectiveness under stress
 #[test]
-#[serial_test::serial]
+// Parallel test with isolated context
 fn test_ffi_buffer_pool_effectiveness() {
+    let _ctx = TestContextGuard::new();
+
     assert_eq!(anidb_init(1), AniDBResult::Success);
 
     let file_manager = TestFileManager::new();
@@ -1101,5 +1122,5 @@ fn test_ffi_buffer_pool_effectiveness() {
     );
 
     anidb_client_destroy(client_handle);
-    anidb_cleanup();
+    anidb_cleanup(std::ptr::null_mut());
 }

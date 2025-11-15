@@ -266,7 +266,7 @@ EventCallback = ctypes.CFUNCTYPE(None, POINTER(Event), c_void_p)
 lib.anidb_init.argtypes = [c_uint32]
 lib.anidb_init.restype = c_int
 
-lib.anidb_cleanup.argtypes = []
+lib.anidb_cleanup.argtypes = [c_void_p]
 lib.anidb_cleanup.restype = None
 
 lib.anidb_get_version.argtypes = []

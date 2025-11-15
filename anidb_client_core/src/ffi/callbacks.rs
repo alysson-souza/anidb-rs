@@ -3,7 +3,7 @@
 //! This module handles the registration, unregistration, and management
 //! of callbacks for the FFI layer.
 
-use crate::ffi::handles::{CLIENTS, CallbackRegistration};
+use crate::ffi::handles::{CallbackRegistration, resolve_client};
 use crate::ffi::helpers::validate_mut_ptr;
 use crate::ffi::types::{AniDBCallbackType, AniDBResult};
 use crate::ffi_catch_panic;
@@ -23,21 +23,11 @@ pub extern "C" fn anidb_register_callback(
     }
 
     let handle_id = handle as usize;
-    if handle_id == 0 || handle_id > usize::MAX / 2 {
-        return 0;
-    }
 
-    let clients = match CLIENTS.read() {
-        Ok(c) => c,
+    let client_arc = match resolve_client(handle_id) {
+        Ok(client) => client,
         Err(_) => return 0,
     };
-
-    let client_arc = match clients.get(&handle_id) {
-        Some(c) => c.clone(),
-        None => return 0,
-    };
-
-    drop(clients);
 
     let client = match client_arc.lock() {
         Ok(c) => c,
@@ -69,21 +59,11 @@ pub extern "C" fn anidb_unregister_callback(handle: *mut c_void, callback_id: u6
         }
 
         let handle_id = handle as usize;
-        if handle_id == 0 || handle_id > usize::MAX / 2 {
-            return AniDBResult::ErrorInvalidHandle;
-        }
 
-        let clients = match CLIENTS.read() {
-            Ok(c) => c,
-            Err(_) => return AniDBResult::ErrorBusy,
+        let client_arc = match resolve_client(handle_id) {
+            Ok(client) => client,
+            Err(err) => return err,
         };
-
-        let client_arc = match clients.get(&handle_id) {
-            Some(c) => c.clone(),
-            None => return AniDBResult::ErrorInvalidHandle,
-        };
-
-        drop(clients);
 
         let client = match client_arc.lock() {
             Ok(c) => c,

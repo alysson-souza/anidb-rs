@@ -107,7 +107,7 @@ int main() {
     if (result != ANIDB_SUCCESS) {
         fprintf(stderr, "Failed to create client: %s\n", 
                 anidb_error_string(result));
-        anidb_cleanup();
+        anidb_cleanup(NULL);
         return 1;
     }
     
@@ -137,7 +137,7 @@ int main() {
     
     // Cleanup
     anidb_client_destroy(client);
-    anidb_cleanup();
+    anidb_cleanup(NULL);
     
     return 0;
 }

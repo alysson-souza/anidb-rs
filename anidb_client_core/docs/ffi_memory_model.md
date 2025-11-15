@@ -189,5 +189,5 @@ anidb_check_memory_leaks(&leaks, &leaked);
 
 // Cleanup
 anidb_client_destroy(handle);
-anidb_cleanup();
+anidb_cleanup(NULL);
 ```

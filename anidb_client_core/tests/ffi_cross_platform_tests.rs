@@ -8,6 +8,7 @@ use anidb_client_core::ffi::{
     anidb_client_create, anidb_client_create_with_config, anidb_client_destroy,
     anidb_free_file_result, anidb_init, anidb_process_file,
 };
+use anidb_test_utils::TestContextGuard;
 use std::ffi::CString;
 use std::fs;
 use std::ptr;
@@ -15,8 +16,10 @@ use tempfile::TempDir;
 
 /// Platform-specific path handling tests
 #[test]
-#[serial_test::serial]
+// Parallel test with isolated context
 fn test_ffi_platform_path_handling() {
+    let _ctx = TestContextGuard::new();
+
     assert_eq!(anidb_init(1), AniDBResult::Success);
 
     let temp_dir = TempDir::new().unwrap();
@@ -93,13 +96,15 @@ fn test_ffi_platform_path_handling() {
     }
 
     anidb_client_destroy(client_handle);
-    anidb_cleanup();
+    anidb_cleanup(std::ptr::null_mut());
 }
 
 /// Test long path support
 #[test]
-#[serial_test::serial]
+// Parallel test with isolated context
 fn test_ffi_long_path_support() {
+    let _ctx = TestContextGuard::new();
+
     assert_eq!(anidb_init(1), AniDBResult::Success);
 
     let temp_dir = TempDir::new().unwrap();
@@ -161,13 +166,15 @@ fn test_ffi_long_path_support() {
     }
 
     anidb_client_destroy(client_handle);
-    anidb_cleanup();
+    anidb_cleanup(std::ptr::null_mut());
 }
 
 /// Test platform-specific file permissions
 #[test]
-#[serial_test::serial]
+// Parallel test with isolated context
 fn test_ffi_platform_permissions() {
+    let _ctx = TestContextGuard::new();
+
     assert_eq!(anidb_init(1), AniDBResult::Success);
 
     let temp_dir = TempDir::new().unwrap();
@@ -265,13 +272,15 @@ fn test_ffi_platform_permissions() {
     }
 
     anidb_client_destroy(client_handle);
-    anidb_cleanup();
+    anidb_cleanup(std::ptr::null_mut());
 }
 
 /// Test platform-specific performance optimizations
 #[test]
-#[serial_test::serial]
+// Parallel test with isolated context
 fn test_ffi_platform_performance() {
+    let _ctx = TestContextGuard::new();
+
     assert_eq!(anidb_init(1), AniDBResult::Success);
 
     let temp_dir = TempDir::new().unwrap();
@@ -370,5 +379,5 @@ fn test_ffi_platform_performance() {
     }
 
     anidb_client_destroy(client_handle);
-    anidb_cleanup();
+    anidb_cleanup(std::ptr::null_mut());
 }
